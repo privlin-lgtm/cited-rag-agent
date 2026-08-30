@@ -47,6 +47,14 @@ def test_retrieve_rejects_negative_top_k():
         kb.retrieve("question", top_k=-3)
 
 
+def test_retrieve_accepts_empty_question_string():
+    # An empty question is unusual input, not an invalid one -- the embedder can embed "",
+    # and retrieval should not special-case it (it just won't match anything meaningful).
+    chunk = RetrievedChunk(text="hello", source="notes.md")
+    kb = KnowledgeBase(FakeEmbedder(), FakeVectorStore([chunk]))
+    assert kb.retrieve("") == [chunk]
+
+
 def test_retrieve_on_empty_store_returns_no_chunks():
     kb = KnowledgeBase(FakeEmbedder(), FakeVectorStore())
     assert kb.retrieve("anything") == []

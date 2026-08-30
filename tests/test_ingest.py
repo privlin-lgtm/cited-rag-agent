@@ -62,6 +62,24 @@ def test_chunk_text_allows_zero_overlap():
     assert chunk_text(text, chunk_size=3, overlap=0) == ["0 1 2", "3 4 5"]
 
 
+def test_chunk_text_large_document_produces_expected_chunk_count():
+    # A stand-in for "a very large input": a 100,000-word document should chunk in bounded time
+    # and produce exactly the count the step arithmetic predicts, with no runaway/off-by-one.
+    word_count = 100_000
+    text = " ".join(str(i) for i in range(word_count))
+    chunk_size, overlap = 1000, 200
+    step = chunk_size - overlap
+
+    chunks = chunk_text(text, chunk_size=chunk_size, overlap=overlap)
+
+    import math
+
+    expected = math.ceil((word_count - chunk_size) / step) + 1
+    assert len(chunks) == expected
+    assert chunks[0].split()[0] == "0"
+    assert chunks[-1].split()[-1] == str(word_count - 1)
+
+
 # --- discover_files -----------------------------------------------------------
 
 
@@ -151,3 +169,78 @@ def test_load_chunks_same_file_ingested_from_different_relative_paths_has_same_s
     chunks_absolute, _ = load_chunks(f.resolve())
 
     assert chunks_relative[0].source == chunks_absolute[0].source
+
+
+def test_load_chunks_empty_file_produces_no_chunks_and_no_error(tmp_path: Path):
+    (tmp_path / "empty.txt").write_text("")
+
+    chunks, errors = load_chunks(tmp_path)
+
+    assert chunks == []
+    assert errors == []  # an empty file is not a failure -- it legitimately has nothing to index
+
+
+def test_load_chunks_whitespace_only_file_produces_no_chunks_and_no_error(tmp_path: Path):
+    (tmp_path / "blank.md").write_text("   \n\t  \n")
+
+    chunks, errors = load_chunks(tmp_path)
+
+    assert chunks == []
+    assert errors == []
+
+
+def test_load_chunks_image_only_pdf_produces_no_chunks_and_no_error(tmp_path: Path):
+    """A scanned/image-only PDF is valid and readable, but extract_text() returns '' per page --
+    this is NOT an error (unlike a corrupt file), it's a file with nothing extractable. Ingest
+    "succeeds" with zero chunks for it; OCR would be needed to index it, which is out of scope."""
+    from pypdf import PdfWriter
+
+    pdf_path = tmp_path / "scanned.pdf"
+    writer = PdfWriter()
+    writer.add_blank_page(width=72, height=72)
+    with open(pdf_path, "wb") as f:
+        writer.write(f)
+
+    chunks, errors = load_chunks(tmp_path)
+
+    assert chunks == []
+    assert errors == []
+
+
+def test_load_chunks_handles_non_ascii_filenames_and_directories(tmp_path: Path):
+    # Directly relevant to this project: it lives under a OneDrive path with a Hebrew folder
+    # name, which has already caused real path-handling bugs this session (MAX_PATH, mv locks).
+    unicode_dir = tmp_path / "מסמכים"
+    unicode_dir.mkdir()
+    f = unicode_dir / "notes-\U0001f4dd.md"  # includes an emoji too
+    f.write_text("alpha bravo charlie", encoding="utf-8")
+
+    chunks, errors = load_chunks(tmp_path)
+
+    assert errors == []
+    assert len(chunks) == 1
+    assert chunks[0].source == str(f.resolve())
+
+
+def test_load_chunks_is_idempotent_for_unchanged_content(tmp_path: Path):
+    f = tmp_path / "note.txt"
+    f.write_text("alpha bravo charlie delta echo foxtrot")
+
+    first_chunks, first_errors = load_chunks(tmp_path, chunk_size=3, overlap=1)
+    second_chunks, second_errors = load_chunks(tmp_path, chunk_size=3, overlap=1)
+
+    assert first_errors == second_errors == []
+    assert [c.text for c in first_chunks] == [c.text for c in second_chunks]
+    assert [c.source for c in first_chunks] == [c.source for c in second_chunks]
+
+
+def test_load_chunks_mixed_supported_and_unsupported_files(tmp_path: Path):
+    (tmp_path / "note.md").write_text("alpha bravo")
+    (tmp_path / "note.txt").write_text("charlie delta")
+    (tmp_path / "image.png").write_bytes(b"\x89PNG\r\n\x1a\n")
+    (tmp_path / "archive.zip").write_bytes(b"PK\x03\x04")
+
+    chunks, errors = load_chunks(tmp_path, chunk_size=10, overlap=0)
+
+    assert errors == []
+    assert {Path(c.source).name for c in chunks} == {"note.md", "note.txt"}
