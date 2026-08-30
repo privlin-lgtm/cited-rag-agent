@@ -12,11 +12,17 @@ Ingest PDFs and notes, then ask questions about them in natural language.
 
 ## Setup
 
+The project path (deeply nested under OneDrive with a non-ASCII folder name) is long enough that
+some packages (torch's license files in particular) blow past Windows' 260-character path limit
+if the virtualenv lives inside the project. Create it in a short path instead:
+
 ```bash
-python -m venv .venv
-.venv\Scripts\activate
+python -m venv C:\Users\<you>\.venvs\pk-rag
+C:\Users\<you>\.venvs\pk-rag\Scripts\activate
 pip install -r requirements.txt
 ```
+
+(If your Windows build has [long path support](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation#enable-long-paths-in-windows-10-version-1607-and-later) enabled, a regular `.venv` inside the project works fine too.)
 
 Copy `.env.example` to `.env` and add your Anthropic API key:
 
