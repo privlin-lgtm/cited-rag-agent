@@ -92,7 +92,9 @@ def test_ask_propagates_invalid_top_k():
 
 def test_ask_streams_tokens_and_returns_the_joined_answer(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "test-key")
-    monkeypatch.setattr(qa.anthropic, "Anthropic", lambda api_key: FakeAnthropicClient(["Hello", " world"]))
+    monkeypatch.setattr(
+        qa.anthropic, "Anthropic", lambda api_key: FakeAnthropicClient(["Hello", " world"])
+    )
 
     chunk = RetrievedChunk(text="some fact", source="notes.md")
     kb = KnowledgeBase(FakeEmbedder(), FakeVectorStore([chunk]))

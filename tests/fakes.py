@@ -6,7 +6,7 @@ from rag.interfaces import RetrievedChunk
 
 
 class FakeEmbedder:
-    """Returns a fixed-length zero vector per text; embedding values don't matter for these tests."""
+    """Returns a fixed-length zero vector per text; values don't matter for these tests."""
 
     def embed(self, texts: list[str]) -> list[list[float]]:
         return [[0.0] for _ in texts]
