@@ -2,13 +2,16 @@
 
 from __future__ import annotations
 
+import logging
 import os
-from typing import Callable
+from collections.abc import Callable
 
 import anthropic
 
 from rag.config import LLM_MODEL
 from rag.knowledge_base import KnowledgeBase
+
+logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = (
     "You answer questions using only the text inside <context> tags below. "
@@ -37,6 +40,7 @@ def ask(
             on_token(text)
 
     context, sources = build_context(kb, question, top_k=top_k)
+    logger.debug("retrieved %d source(s) for question", len(sources))
     if not context:
         message = "No documents have been ingested yet. Run `ingest` first."
         emit(message)
@@ -44,6 +48,7 @@ def ask(
 
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
+        logger.warning("ANTHROPIC_API_KEY not set; falling back to raw excerpts")
         message = (
             "ANTHROPIC_API_KEY is not set, so I can't generate an answer. "
             f"Here are the most relevant excerpts instead:\n\n{context}"
@@ -54,6 +59,7 @@ def ask(
     client = anthropic.Anthropic(api_key=api_key)
     user_message = f"<context>\n{context}\n</context>\n\nQuestion: {question}"
 
+    logger.info("calling %s", LLM_MODEL)
     pieces: list[str] = []
     with client.messages.stream(
         model=LLM_MODEL,

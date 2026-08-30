@@ -6,7 +6,6 @@ import pytest
 
 from rag.ingest import chunk_text, discover_files, load_chunks
 
-
 # --- chunk_text -------------------------------------------------------------
 
 

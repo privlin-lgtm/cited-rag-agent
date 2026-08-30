@@ -13,7 +13,10 @@ from rag import qa
 from rag.config import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE
 from rag.embeddings import SentenceTransformerEmbedder
 from rag.ingest import load_chunks
+from rag.inmemory_vectorstore import InMemoryVectorStore
+from rag.interfaces import VectorStore
 from rag.knowledge_base import KnowledgeBase
+from rag.logging_config import configure_logging
 from rag.vectorstore import ChromaVectorStore
 
 console = Console()
@@ -68,12 +71,27 @@ def cmd_list(args: argparse.Namespace, kb: KnowledgeBase) -> None:
         console.print(f"  - {escape(source)}")
 
 
+def build_store(store_kind: str, collection: str) -> VectorStore:
+    if store_kind == "memory":
+        return InMemoryVectorStore()
+    return ChromaVectorStore(collection_name=collection)
+
+
 def main() -> None:
     load_dotenv()
 
     parser = argparse.ArgumentParser(prog="rag", description="Personal Knowledge RAG System")
     parser.add_argument(
         "--collection", default="knowledge_base", help="Vector store collection to use"
+    )
+    parser.add_argument(
+        "--store",
+        choices=["chroma", "memory"],
+        default="chroma",
+        help="Vector store backend: persistent Chroma (default) or ephemeral in-memory",
+    )
+    parser.add_argument(
+        "-v", "--verbose", action="store_true", help="Enable debug logging"
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
 
@@ -83,7 +101,10 @@ def main() -> None:
         "--chunk-size", type=int, default=DEFAULT_CHUNK_SIZE, help="Words per chunk"
     )
     ingest_parser.add_argument(
-        "--overlap", type=int, default=DEFAULT_CHUNK_OVERLAP, help="Overlapping words between chunks"
+        "--overlap",
+        type=int,
+        default=DEFAULT_CHUNK_OVERLAP,
+        help="Overlapping words between chunks",
     )
     ingest_parser.set_defaults(func=cmd_ingest)
 
@@ -96,10 +117,11 @@ def main() -> None:
     list_parser.set_defaults(func=cmd_list)
 
     args = parser.parse_args()
+    configure_logging(verbose=args.verbose)
 
     kb = KnowledgeBase(
         embedder=SentenceTransformerEmbedder(),
-        store=ChromaVectorStore(collection_name=args.collection),
+        store=build_store(args.store, args.collection),
     )
     args.func(args, kb)
 

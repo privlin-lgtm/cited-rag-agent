@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import chromadb
@@ -9,9 +10,13 @@ import chromadb
 from rag.config import PERSIST_DIR
 from rag.interfaces import RetrievedChunk
 
+logger = logging.getLogger(__name__)
+
 
 class ChromaVectorStore:
-    def __init__(self, collection_name: str = "knowledge_base", persist_dir: Path = PERSIST_DIR) -> None:
+    def __init__(
+        self, collection_name: str = "knowledge_base", persist_dir: Path = PERSIST_DIR
+    ) -> None:
         self._collection_name = collection_name
         self._persist_dir = persist_dir
         self._collection = None
@@ -19,6 +24,9 @@ class ChromaVectorStore:
     @property
     def collection(self):
         if self._collection is None:
+            logger.debug(
+                "opening Chroma collection %r at %s", self._collection_name, self._persist_dir
+            )
             client = chromadb.PersistentClient(path=str(self._persist_dir))
             self._collection = client.get_or_create_collection(self._collection_name)
         return self._collection
@@ -30,7 +38,9 @@ class ChromaVectorStore:
         metadatas: list[dict],
         documents: list[str],
     ) -> None:
-        self.collection.upsert(ids=ids, embeddings=embeddings, metadatas=metadatas, documents=documents)
+        self.collection.upsert(
+            ids=ids, embeddings=embeddings, metadatas=metadatas, documents=documents
+        )
 
     def delete_by_source(self, source: str) -> None:
         self.collection.delete(where={"source": source})

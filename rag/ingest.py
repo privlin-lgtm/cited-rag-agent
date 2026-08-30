@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 
 from pypdf import PdfReader
 
 from rag.config import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE
+
+logger = logging.getLogger(__name__)
 
 SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md"}
 
@@ -60,15 +63,20 @@ def load_chunks(
     path: Path, chunk_size: int = DEFAULT_CHUNK_SIZE, overlap: int = DEFAULT_CHUNK_OVERLAP
 ) -> tuple[list[Chunk], list[tuple[Path, Exception]]]:
     files = discover_files(path)
+    logger.debug("discovered %d candidate file(s) under %s", len(files), path)
+
     chunks: list[Chunk] = []
     errors: list[tuple[Path, Exception]] = []
     for file in files:
         try:
             text = read_text_from_file(file)
         except Exception as e:
+            logger.warning("failed to read %s: %s", file, e)
             errors.append((file, e))
             continue
         source = str(file.resolve())
-        for i, chunk in enumerate(chunk_text(text, chunk_size, overlap)):
+        file_chunks = chunk_text(text, chunk_size, overlap)
+        logger.debug("%s -> %d chunk(s)", file, len(file_chunks))
+        for i, chunk in enumerate(file_chunks):
             chunks.append(Chunk(text=chunk, source=source, chunk_index=i))
     return chunks, errors
