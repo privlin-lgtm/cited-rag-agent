@@ -7,6 +7,8 @@ from pathlib import Path
 
 from pypdf import PdfReader
 
+from rag.config import DEFAULT_CHUNK_OVERLAP, DEFAULT_CHUNK_SIZE
+
 SUPPORTED_EXTENSIONS = {".pdf", ".txt", ".md"}
 
 
@@ -24,7 +26,9 @@ def read_text_from_file(path: Path) -> str:
     return path.read_text(encoding="utf-8", errors="ignore")
 
 
-def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> list[str]:
+def chunk_text(
+    text: str, chunk_size: int = DEFAULT_CHUNK_SIZE, overlap: int = DEFAULT_CHUNK_OVERLAP
+) -> list[str]:
     if chunk_size <= 0:
         raise ValueError(f"chunk_size must be positive, got {chunk_size}")
     if overlap >= chunk_size:
@@ -53,7 +57,7 @@ def discover_files(path: Path) -> list[Path]:
 
 
 def load_chunks(
-    path: Path, chunk_size: int = 1000, overlap: int = 200
+    path: Path, chunk_size: int = DEFAULT_CHUNK_SIZE, overlap: int = DEFAULT_CHUNK_OVERLAP
 ) -> tuple[list[Chunk], list[tuple[Path, Exception]]]:
     files = discover_files(path)
     chunks: list[Chunk] = []

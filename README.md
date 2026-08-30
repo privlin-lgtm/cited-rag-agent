@@ -47,15 +47,56 @@ python -m rag.cli list
 Without an `ANTHROPIC_API_KEY` set, `ask` falls back to printing the raw retrieved excerpts
 instead of a synthesized answer.
 
+Use `--collection <name>` (before the subcommand) to keep separate knowledge bases —
+e.g. `python -m rag.cli --collection work ingest work-notes/`.
+
+## Configuration
+
+All of these are optional environment variables (see `config.py`):
+
+| Variable              | Default                | Purpose                              |
+|-----------------------|-------------------------|---------------------------------------|
+| `RAG_EMBEDDING_MODEL` | `all-MiniLM-L6-v2`      | sentence-transformers model to embed with |
+| `RAG_LLM_MODEL`       | `claude-sonnet-5`       | Claude model used to synthesize answers |
+| `RAG_DATA_DIR`        | `<project>/.chroma`     | Where the vector store persists data |
+
+## Testing
+
+```bash
+pip install -r requirements-dev.txt
+pytest
+```
+
+Tests use in-memory fakes for the embedding model and vector store (`tests/fakes.py`), so they
+run instantly with no model download, disk I/O, or network access.
+
 ## Project layout
 
 ```
 rag/
-  ingest.py       # file loading + chunking (PDF via pypdf, plain text/markdown)
-  embeddings.py   # local embedding model
-  vectorstore.py  # Chroma persistence + similarity search
-  qa.py           # retrieval + Claude-based answer synthesis
-  cli.py          # ingest / ask / list commands
-data/             # put your source documents here
-.chroma/          # persisted vector DB (gitignored)
+  config.py         # centralized, env-overridable settings
+  interfaces.py      # Embedder / VectorStore protocols + RetrievedChunk
+  ingest.py           # file loading + chunking (PDF via pypdf, plain text/markdown)
+  embeddings.py       # SentenceTransformerEmbedder (implements Embedder)
+  vectorstore.py       # ChromaVectorStore (implements VectorStore)
+  knowledge_base.py     # KnowledgeBase facade: orchestrates embedder + store
+  qa.py                  # retrieval + streaming Claude-based answer synthesis
+  cli.py                  # composition root: wires dependencies, ingest/ask/list commands
+tests/
+  fakes.py            # in-memory Embedder/VectorStore fakes for fast, isolated tests
+  test_ingest.py        # chunking + file-discovery edge cases
+  test_knowledge_base.py # add/retrieve orchestration edge cases
+  test_qa.py              # context building, fallbacks, streaming, prompt-injection guard
+data/                # put your source documents here
+.chroma/             # persisted vector DB (gitignored)
 ```
+
+### Why this shape
+
+`cli.py` is the only place that imports the concrete `SentenceTransformerEmbedder` and
+`ChromaVectorStore` classes and wires them into a `KnowledgeBase` — every other module depends on
+the `Embedder`/`VectorStore` protocols in `interfaces.py`, not the libraries themselves. Swapping
+the embedding model or vector database means writing one new class that satisfies the protocol and
+changing that one wiring line in `cli.py`; `qa.py` and `knowledge_base.py` never change. It's also
+what makes the test suite fast and offline: tests substitute `tests/fakes.py` for the real
+sentence-transformers/Chroma implementations instead of mocking library internals.

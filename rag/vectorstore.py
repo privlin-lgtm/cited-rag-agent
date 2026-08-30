@@ -1,4 +1,4 @@
-"""Persistent local vector store backed by ChromaDB."""
+"""Persistent local vector store backed by ChromaDB, implementing the VectorStore protocol."""
 
 from __future__ import annotations
 
@@ -6,38 +6,42 @@ from pathlib import Path
 
 import chromadb
 
-from rag.embeddings import embed
-from rag.ingest import Chunk
-
-PERSIST_DIR = Path(__file__).resolve().parent.parent / ".chroma"
-COLLECTION_NAME = "knowledge_base"
+from rag.config import PERSIST_DIR
+from rag.interfaces import RetrievedChunk
 
 
-def get_collection():
-    client = chromadb.PersistentClient(path=str(PERSIST_DIR))
-    return client.get_or_create_collection(COLLECTION_NAME)
+class ChromaVectorStore:
+    def __init__(self, collection_name: str = "knowledge_base", persist_dir: Path = PERSIST_DIR) -> None:
+        self._collection_name = collection_name
+        self._persist_dir = persist_dir
+        self._collection = None
 
+    @property
+    def collection(self):
+        if self._collection is None:
+            client = chromadb.PersistentClient(path=str(self._persist_dir))
+            self._collection = client.get_or_create_collection(self._collection_name)
+        return self._collection
 
-def add_chunks(chunks: list[Chunk]) -> None:
-    if not chunks:
-        return
-    collection = get_collection()
-    for source in sorted({c.source for c in chunks}):
-        collection.delete(where={"source": source})
-    embeddings = embed([c.text for c in chunks])
-    ids = [f"{c.source}::{c.chunk_index}" for c in chunks]
-    metadatas = [{"source": c.source, "chunk_index": c.chunk_index} for c in chunks]
-    documents = [c.text for c in chunks]
-    collection.upsert(ids=ids, embeddings=embeddings, metadatas=metadatas, documents=documents)
+    def upsert(
+        self,
+        ids: list[str],
+        embeddings: list[list[float]],
+        metadatas: list[dict],
+        documents: list[str],
+    ) -> None:
+        self.collection.upsert(ids=ids, embeddings=embeddings, metadatas=metadatas, documents=documents)
 
+    def delete_by_source(self, source: str) -> None:
+        self.collection.delete(where={"source": source})
 
-def query(question: str, top_k: int = 5):
-    collection = get_collection()
-    question_embedding = embed([question])[0]
-    return collection.query(query_embeddings=[question_embedding], n_results=top_k)
+    def query(self, embedding: list[float], top_k: int) -> list[RetrievedChunk]:
+        result = self.collection.query(query_embeddings=[embedding], n_results=top_k)
+        return [
+            RetrievedChunk(text=doc, source=meta["source"])
+            for doc, meta in zip(result["documents"][0], result["metadatas"][0])
+        ]
 
-
-def list_sources() -> list[str]:
-    collection = get_collection()
-    metadatas = collection.get(include=["metadatas"])["metadatas"]
-    return sorted({m["source"] for m in metadatas})
+    def list_sources(self) -> list[str]:
+        metadatas = self.collection.get(include=["metadatas"])["metadatas"]
+        return sorted({m["source"] for m in metadatas})

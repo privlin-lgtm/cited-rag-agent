@@ -1,20 +1,22 @@
-"""Local embedding model wrapper (sentence-transformers)."""
+"""Local embedding model (sentence-transformers) implementing the Embedder protocol."""
 
 from __future__ import annotations
 
 from sentence_transformers import SentenceTransformer
 
-MODEL_NAME = "all-MiniLM-L6-v2"
-
-_model: SentenceTransformer | None = None
+from rag.config import EMBEDDING_MODEL
 
 
-def get_model() -> SentenceTransformer:
-    global _model
-    if _model is None:
-        _model = SentenceTransformer(MODEL_NAME)
-    return _model
+class SentenceTransformerEmbedder:
+    def __init__(self, model_name: str = EMBEDDING_MODEL) -> None:
+        self._model_name = model_name
+        self._model: SentenceTransformer | None = None
 
+    @property
+    def model(self) -> SentenceTransformer:
+        if self._model is None:
+            self._model = SentenceTransformer(self._model_name)
+        return self._model
 
-def embed(texts: list[str]) -> list[list[float]]:
-    return get_model().encode(texts, convert_to_numpy=True).tolist()
+    def embed(self, texts: list[str]) -> list[list[float]]:
+        return self.model.encode(texts, convert_to_numpy=True).tolist()
