@@ -25,12 +25,17 @@ def read_text_from_file(path: Path) -> str:
 
 
 def chunk_text(text: str, chunk_size: int = 1000, overlap: int = 200) -> list[str]:
+    if chunk_size <= 0:
+        raise ValueError(f"chunk_size must be positive, got {chunk_size}")
+    if overlap >= chunk_size:
+        raise ValueError(f"overlap ({overlap}) must be smaller than chunk_size ({chunk_size})")
+
     words = text.split()
     if not words:
         return []
 
     chunks = []
-    step = max(chunk_size - overlap, 1)
+    step = chunk_size - overlap
     for start in range(0, len(words), step):
         chunk_words = words[start : start + chunk_size]
         chunks.append(" ".join(chunk_words))
@@ -47,11 +52,19 @@ def discover_files(path: Path) -> list[Path]:
     )
 
 
-def load_chunks(path: Path, chunk_size: int = 1000, overlap: int = 200) -> list[Chunk]:
+def load_chunks(
+    path: Path, chunk_size: int = 1000, overlap: int = 200
+) -> tuple[list[Chunk], list[tuple[Path, Exception]]]:
     files = discover_files(path)
     chunks: list[Chunk] = []
+    errors: list[tuple[Path, Exception]] = []
     for file in files:
-        text = read_text_from_file(file)
+        try:
+            text = read_text_from_file(file)
+        except Exception as e:
+            errors.append((file, e))
+            continue
+        source = str(file.resolve())
         for i, chunk in enumerate(chunk_text(text, chunk_size, overlap)):
-            chunks.append(Chunk(text=chunk, source=str(file), chunk_index=i))
-    return chunks
+            chunks.append(Chunk(text=chunk, source=source, chunk_index=i))
+    return chunks, errors

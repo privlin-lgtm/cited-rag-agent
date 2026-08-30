@@ -20,9 +20,17 @@ def cmd_ingest(args: argparse.Namespace) -> None:
         console.print(f"[red]Path not found:[/red] {path}")
         return
 
-    chunks = load_chunks(path, chunk_size=args.chunk_size, overlap=args.overlap)
+    try:
+        chunks, errors = load_chunks(path, chunk_size=args.chunk_size, overlap=args.overlap)
+    except ValueError as e:
+        console.print(f"[red]{e}[/red]")
+        return
+
+    for file, error in errors:
+        console.print(f"[yellow]Skipped {file} ({error}):[/yellow]")
+
     if not chunks:
-        console.print(f"[yellow]No supported files found under {path}[/yellow]")
+        console.print(f"[yellow]No supported files ingested under {path}[/yellow]")
         return
 
     vectorstore.add_chunks(chunks)
@@ -34,7 +42,7 @@ def cmd_ingest(args: argparse.Namespace) -> None:
 
 def cmd_ask(args: argparse.Namespace) -> None:
     answer = qa.ask(args.question, top_k=args.top_k)
-    console.print(answer)
+    console.print(answer, markup=False)
 
 
 def cmd_list(args: argparse.Namespace) -> None:

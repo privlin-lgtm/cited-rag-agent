@@ -22,6 +22,8 @@ def add_chunks(chunks: list[Chunk]) -> None:
     if not chunks:
         return
     collection = get_collection()
+    for source in sorted({c.source for c in chunks}):
+        collection.delete(where={"source": source})
     embeddings = embed([c.text for c in chunks])
     ids = [f"{c.source}::{c.chunk_index}" for c in chunks]
     metadatas = [{"source": c.source, "chunk_index": c.chunk_index} for c in chunks]
