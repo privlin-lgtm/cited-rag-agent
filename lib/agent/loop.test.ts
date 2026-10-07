@@ -11,7 +11,7 @@ const usage = { input_tokens: 100, output_tokens: 20, cache_creation_input_token
 const reply = (content: unknown[], stopReason: StopReason | null) =>
   ({ id: 'msg', type: 'message', role: 'assistant', model: 'claude-sonnet-5-5', content, stop_reason: stopReason, stop_sequence: null, stop_details: null, usage }) as unknown as Message;
 const text = (value: string, citations: TextCitation[] | null = null) => ({ type: 'text', text: value, citations });
-const use = (id: string, name: string, input: unknown) => ({ type: 'tool_use', id, name, input, caller: { type: 'direct' } });
+const toolUse = (id: string, name: string, input: unknown) => ({ type: 'tool_use', id, name, input, caller: { type: 'direct' } });
 const cite = (index: number, start: number, end = start + 1): TextCitation => ({
   type: 'search_result_location',
   search_result_index: index,
@@ -61,8 +61,8 @@ beforeEach(async () => {
 
 describe('runAgent', () => {
   it('maps citations from either round through one global index and passes assistant turns back unchanged', async () => {
-    const first = [text('Looking for cancellation rules.'), use('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 3 })];
-    const second = [use('t2', 'keyword_search', { terms: '1005.33' })];
+    const first = [text('Looking for cancellation rules.'), toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 3 })];
+    const second = [toolUse('t2', 'keyword_search', { terms: '1005.33' })];
     const { model, calls } = scripted((so) => {
       if (so.length === 1) return reply(first, 'tool_use');
       if (so.length === 2) return reply(second, 'tool_use');
@@ -107,7 +107,7 @@ describe('runAgent', () => {
     };
     const { model, calls } = scripted((so) =>
       so.length === 1
-        ? reply([use('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 1 }), use('t2', 'keyword_search', { terms: '1005.33', k: 1 })], 'tool_use')
+        ? reply([toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 1 }), toolUse('t2', 'keyword_search', { terms: '1005.33', k: 1 })], 'tool_use')
         : reply([text('Done.')], 'end_turn'),
     );
     const events = await run(model, { embed: slow });
@@ -118,7 +118,7 @@ describe('runAgent', () => {
   });
 
   it('sends one search_result per occurrence when two searches return the same chunk, and shows it once', async () => {
-    const search = (id: string) => use(id, 'search_documents', { query: 'cancel a remittance transfer', k: 1 });
+    const search = (id: string) => toolUse(id, 'search_documents', { query: 'cancel a remittance transfer', k: 1 });
     const { model } = scripted((so) =>
       so.length === 1 ? reply([search('t1'), search('t2')], 'tool_use') : reply([text('Cancel within 30 minutes.', [cite(0, 0), cite(1, 1)])], 'end_turn'),
     );
@@ -139,7 +139,7 @@ describe('runAgent', () => {
   it('finishes a truncated answer as cut off, and still checks its citations', async () => {
     const { model } = scripted((so) =>
       so.length === 1
-        ? reply([use('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 1 })], 'tool_use')
+        ? reply([toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 1 })], 'tool_use')
         : reply([text('A sender can cancel', [cite(0, 0)])], 'max_tokens'),
     );
     const [citations] = ofType(await run(model), 'citations');
@@ -154,7 +154,7 @@ describe('runAgent', () => {
   });
 
   it('makes the call after round 6 with tool_choice none, and never sends any other tool_choice or an effort', async () => {
-    const { model, calls } = scripted((so) => (so.length <= 6 ? reply([use(`t${so.length}`, 'list_documents', {})], 'tool_use') : reply([text('Final answer.')], 'end_turn')));
+    const { model, calls } = scripted((so) => (so.length <= 6 ? reply([toolUse(`t${so.length}`, 'list_documents', {})], 'tool_use') : reply([text('Final answer.')], 'end_turn')));
     const events = await run(model);
     expect(calls).toHaveLength(7);
     calls.slice(0, 6).forEach((params) => expect(params).not.toHaveProperty('tool_choice'));
@@ -170,7 +170,7 @@ describe('runAgent', () => {
   });
 
   it('throws when the model still asks for a tool on the call after round 6', async () => {
-    const { model } = scripted((so) => reply([use(`t${so.length}`, 'list_documents', {})], 'tool_use'));
+    const { model } = scripted((so) => reply([toolUse(`t${so.length}`, 'list_documents', {})], 'tool_use'));
     await expect(run(model)).rejects.toThrow('another tool after the last round');
   });
 
@@ -181,7 +181,7 @@ describe('runAgent', () => {
 
   it('reports a model failure with the passages retrieved so far, and records usage only for calls that returned', async () => {
     const { model } = scripted((so) =>
-      so.length === 1 ? reply([use('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 2 })], 'tool_use') : new Error('Overloaded'),
+      so.length === 1 ? reply([toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 2 })], 'tool_use') : new Error('Overloaded'),
     );
     const events = await run(model);
     const [error] = ofType(events, 'error');
@@ -196,7 +196,7 @@ describe('runAgent', () => {
   it('answers an unknown tool and invalid input with error results and carries on', async () => {
     const { model, calls } = scripted((so) =>
       so.length === 1
-        ? reply([use('t1', 'drop_tables', {}), use('t2', 'search_documents', { query: 'x', k: 50 })], 'tool_use')
+        ? reply([toolUse('t1', 'drop_tables', {}), toolUse('t2', 'search_documents', { query: 'x', k: 50 })], 'tool_use')
         : reply([text('Sorry.')], 'end_turn'),
     );
     const events = await run(model);
@@ -212,7 +212,7 @@ describe('runAgent', () => {
       throw new Error('Voyage is down');
     };
     const { model } = scripted((so) =>
-      so.length === 1 ? reply([use('t1', 'search_documents', { query: 'how long to cancel a remittance transfer' })], 'tool_use') : reply([text('Done.')], 'end_turn'),
+      so.length === 1 ? reply([toolUse('t1', 'search_documents', { query: 'how long to cancel a remittance transfer' })], 'tool_use') : reply([text('Done.')], 'end_turn'),
     );
     const [step] = ofType(await run(model, { embed: failing }), 'step');
     expect(step.fallback).toBe('keyword');
@@ -220,7 +220,7 @@ describe('runAgent', () => {
   });
 
   it('cannot be pushed outside its scope by a tool argument, so a citation of what was never sent fails as unchecked', async () => {
-    const outside = [use('t1', 'search_documents', { query: 'settlement windows', document_ids: [fixture.ids['settlement.md']] })];
+    const outside = [toolUse('t1', 'search_documents', { query: 'settlement windows', document_ids: [fixture.ids['settlement.md']] })];
     const { model, calls } = scripted((so) => (so.length === 1 ? reply(outside, 'tool_use') : reply([text('Windows group transfers.', [cite(0, 0)])], 'end_turn')));
     const events = await run(model, { scope: [fixture.ids['cancel.md']] });
     expect(toolResults(calls[1])[0]).toMatchObject({ is_error: true });
