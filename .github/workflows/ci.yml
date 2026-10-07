@@ -1,45 +1,24 @@
 name: CI
 
 on:
-  push:
-    branches: [master]
   pull_request:
+  push:
+    branches: [sandbox, qa, master]
+
+permissions:
+  contents: read
 
 jobs:
-  test:
+  check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          python-version: "3.12"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
-
-      - name: Lint (ruff)
-        run: ruff check .
-
-      - name: Type check (mypy)
-        run: mypy rag
-
-      - name: Unit tests
-        run: pytest -m "not integration"
-
-  integration:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-          cache: "pip"
-
-      - name: Install dependencies
-        run: pip install -r requirements-dev.txt
-
-      - name: Integration tests (real embedder + real Chroma store)
-        run: pytest -m integration
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
