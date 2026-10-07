@@ -62,12 +62,13 @@ const mojaloopPage = (id: string, title: string, path: string, filename: string)
   filename: `mojaloop/${filename}`,
   kind: 'md',
   licence: MOJALOOP_LICENCE,
+  licenceUrl: 'https://www.apache.org/licenses/LICENSE-2.0',
   attribution: MOJALOOP_ATTRIBUTION,
   note: `mojaloop/documentation at commit ${MOJALOOP_SHA}, path ${path}.`,
   load: direct(mojaloopUrl(path)),
 });
 
-const sources = (date: string): Source[] => [
+export const sources = (date: string): Source[] => [
   {
     id: 'cfpb-small-entity-guide',
     title: 'CFPB Remittance Transfers Small Entity Compliance Guide (version 5.0)',
@@ -105,6 +106,7 @@ const sources = (date: string): Source[] => [
     filename: 'directive-eu-2015-2366-psd2.pdf',
     kind: 'pdf',
     licence: 'Reuse authorised under Commission Decision 2011/833/EU',
+    licenceUrl: 'https://eur-lex.europa.eu/content/legal-notice/legal-notice.html',
     attribution: '© European Union, https://eur-lex.europa.eu/, 1998–2026. Only the Official Journal of the European Union is authentic.',
     note: "Same Official Journal text as EUR-Lex CELEX:32015L2366 (https://eur-lex.europa.eu/eli/dir/2015/2366/oj). Downloaded from the Publications Office's Cellar because EUR-Lex challenges scripted downloads.",
     load: direct(PSD2_URL),
@@ -120,8 +122,9 @@ const sources = (date: string): Source[] => [
       'docs/technical/api/fspiop/generic-transaction-patterns.md',
       'generic-transaction-patterns.md',
     ),
-    licence: "CC BY-ND 4.0, as stated in the page's own front matter (the repository's LICENSE.md is Apache-2.0)",
-    attribution: '© Mojaloop Foundation; Ericsson, Huawei, Mahindra-Comviva, Telepin, and the Bill & Melinda Gates Foundation',
+    licence: 'CC BY-ND 4.0',
+    licenceUrl: 'https://creativecommons.org/licenses/by-nd/4.0/',
+    attribution: 'Ericsson, Huawei, Mahindra-Comviva, Telepin, and the Bill & Melinda Gates Foundation',
     note: `mojaloop/documentation at commit ${MOJALOOP_SHA}, path docs/technical/api/fspiop/generic-transaction-patterns.md. This page's front matter says "Attribution-NoDerivatives 4.0 International (CC BY-ND 4.0)", unlike the Apache-2.0 repository licence. The file is committed unmodified.`,
   },
   mojaloopPage(
@@ -173,26 +176,27 @@ export const fetchCorpus = async () => {
     await check?.(bytes);
     downloaded.push({ entry: { ...entry, sourceUrl, sha256: sha256(bytes) }, bytes });
   }
-  const licenceUrl = mojaloopUrl('LICENSE.md');
-  const licenceBytes = await get(licenceUrl);
-  verify('md', licenceUrl, licenceBytes);
+  const licenceFileUrl = mojaloopUrl('LICENSE.md');
+  const licenceBytes = await get(licenceFileUrl);
+  verify('md', licenceFileUrl, licenceBytes);
   const total = downloaded.reduce((sum, { bytes }) => sum + bytes.length, licenceBytes.length);
   if (total > MAX_BYTES) throw new Error(`corpus is ${total} bytes, over the ${MAX_BYTES} byte limit`);
   for (const { entry, bytes } of downloaded) await write(entry.filename, bytes);
   await write('mojaloop/LICENSE.md', licenceBytes);
   const manifest = manifestSchema.parse({
-    documents: downloaded.map(({ entry: { id, title, filename, kind, sourceUrl, licence, attribution, sha256, note } }) => ({
+    documents: downloaded.map(({ entry: { id, title, filename, kind, sourceUrl, licence, licenceUrl, attribution, sha256, note } }) => ({
       id,
       title,
       filename,
       kind,
       sourceUrl,
       licence,
+      ...(licenceUrl && { licenceUrl }),
       attribution,
       sha256,
       ...(note && { note }),
     })),
-    licenceFiles: [{ filename: 'mojaloop/LICENSE.md', sourceUrl: licenceUrl, sha256: sha256(licenceBytes) }],
+    licenceFiles: [{ filename: 'mojaloop/LICENSE.md', sourceUrl: licenceFileUrl, sha256: sha256(licenceBytes) }],
   });
   await writeFile(new URL('manifest.json', corpusDir), `${JSON.stringify(manifest, null, 2)}\n`);
   return { manifest, total, sizes: new Map(downloaded.map(({ entry, bytes }) => [entry.filename, bytes.length])) };

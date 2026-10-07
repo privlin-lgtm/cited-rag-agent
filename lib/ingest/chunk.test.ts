@@ -105,6 +105,16 @@ describe('chunkParts on the committed corpus', () => {
         else expect(locator, document.filename).toMatch(/^lines \d+–\d+$/);
   });
 
+  it('leaves the CFPB guide and PSD2 running headers out of every chunk', () => {
+    const chunksOf = (filename: string) => chunked.find(({ document }) => document.filename === filename)?.chunks ?? [];
+    const guide = chunksOf('cfpb_remittance-transfers_small-entity-compliance-guide.pdf');
+    expect(guide.length).toBeGreaterThan(0);
+    for (const { content } of guide) expect(content).not.toContain('CONSUMER FINANCIAL PROTECTION BUREAU v 5.0');
+    const psd2 = chunksOf('directive-eu-2015-2366-psd2.pdf');
+    expect(psd2.length).toBeGreaterThan(0);
+    for (const { content } of psd2) for (const line of content.split('\n')) expect(line).not.toMatch(/^EN.*Official Journal of the European Union/);
+  });
+
   it('splits every chunk into sentence blocks that rejoin to the chunk text', () => {
     for (const { document, chunks } of chunked)
       for (const { content } of chunks) expect(splitSentences(content).join(' '), document.filename).toBe(collapse(content));

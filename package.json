@@ -12,19 +12,25 @@
     "test": "vitest run",
     "migrate": "tsx --env-file-if-exists=.env.local scripts/migrate.ts",
     "corpus:fetch": "tsx scripts/corpus-fetch.ts",
-    "ingest:corpus": "tsx --env-file-if-exists=.env.local scripts/ingest-corpus.ts"
+    "ingest:corpus": "tsx --env-file-if-exists=.env.local scripts/ingest-corpus.ts",
+    "smoke:sql": "tsx --env-file-if-exists=.env.local scripts/smoke-sql.ts"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "0.131.0",
+    "class-variance-authority": "0.7.1",
+    "clsx": "2.1.1",
     "next": "16.4.0",
     "postgres": "3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "tailwind-merge": "3.7.0",
     "unpdf": "1.8.1",
     "zod": "4.6.5"
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.8",
     "@electric-sql/pglite-pgvector": "0.0.9",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "24.19.1",
     "@types/react": "19.3.0",

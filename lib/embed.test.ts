@@ -105,6 +105,22 @@ describe('createEmbedder', () => {
     expect(sleep).not.toHaveBeenCalled();
   });
 
+  it('makes one attempt with maxRetries 0, so a 429 throws at once', async () => {
+    const fetchImpl = vi.fn(async () => new Response('rate limited', { status: 429 }));
+    const sleep = vi.fn<(ms: number) => Promise<void>>(async () => {});
+    await expect(createEmbedder({ apiKey: 'k', fetchImpl, sleep, maxRetries: 0 })(['text 1'], 'query')).rejects.toThrow('HTTP 429: rate limited');
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it('passes a deadline signal to fetch when timeoutMs is set, and none otherwise', async () => {
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => ok(JSON.parse(init?.body as string).input));
+    await createEmbedder({ apiKey: 'k', fetchImpl, timeoutMs: 5000 })(['text 1'], 'query');
+    await createEmbedder({ apiKey: 'k', fetchImpl })(['text 1'], 'query');
+    expect((fetchImpl.mock.calls[0][1] as RequestInit).signal).toBeInstanceOf(AbortSignal);
+    expect((fetchImpl.mock.calls[1][1] as RequestInit).signal).toBeUndefined();
+  });
+
   it('rejects a response with the wrong dimension or count', async () => {
     const wrongDimension = vi.fn(async () => new Response(JSON.stringify({ data: [{ index: 0, embedding: [1, 2, 3] }], usage: { total_tokens: 1 } })));
     await expect(createEmbedder({ apiKey: 'k', fetchImpl: wrongDimension })(['a'], 'document')).rejects.toThrow();

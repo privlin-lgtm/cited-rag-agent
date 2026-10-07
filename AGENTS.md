@@ -10,8 +10,10 @@ Run from the repo root.
 - `npm test`: Vitest. Healthy: `Test Files  N passed (N)` and `Tests  N passed (N)`.
 - `npm run build`: `next build`. Healthy: `✓ Compiled successfully`, then the route table.
 - `npm run migrate`: applies pending `db/migrations/*.sql` to Sandbox through `.env.local`. Healthy: `applied 0001_init.sql` or `nothing to apply`.
+- `npm run smoke:sql`: runs every statement the app and its scripts issue, through postgres.js on Sandbox, in one transaction that is always rolled back. Run it after any change to SQL, because PGlite hides driver differences. Healthy: one line per statement with its row count, then `rolled back; nothing left behind`.
 - `npm run corpus:fetch`: downloads the corpus into `corpus/files/` and rewrites `corpus/manifest.json`. Needs the network, not `.env.local`. Healthy: one line per document, then `9 documents, 3559380 bytes (3.39 MB)`. A 403 or an HTML answer fails with the URL.
-- `npm run ingest:corpus`: ingests the manifest into the database in `.env.local` (Sandbox). Without a card on the Voyage account the limits are 3 requests and 10K tokens a minute, so a first run takes about 25 minutes. Healthy: one line per document, then `9 ingested, 0 skipped`, and `0 ingested, 9 skipped` on a rerun.
+- `npm run ingest:corpus`: ingests the manifest into the database in `.env.local` (Sandbox). A first run of the nine documents takes about a minute, and a changed `INGEST_VERSION` re-ingests all of them. Healthy: one line per document, then `9 ingested, 0 skipped`, and `0 ingested, 9 skipped` on a rerun.
+- `npx tsx --env-file-if-exists=.env.local scripts/retrieval-check.ts`: embeds three questions with Voyage and prints the top 3 semantic and keyword hits for each, then two table chunks from the CFPB guide. Healthy: `query embeddings used N Voyage tokens`, then three blocks of hits.
 - `npm run eval`: arrives in M4. It does not exist yet.
 
 ## Before reporting done
@@ -47,6 +49,7 @@ When reviewing a pull request, apply `REVIEW.md`.
 - Using `next lint`. It is gone in Next 16; use `npm run lint`.
 - Bumping `@electric-sql/pglite` without `@electric-sql/pglite-pgvector`.
 - Connecting migrations through a pooled transaction endpoint.
+- Passing a JSON string to a `$n::jsonb` parameter. postgres.js encodes it twice and PGlite does not, so tests pass and Sandbox fails. Use `$n::text::jsonb`, and run `npm run smoke:sql`.
 - Retrying or working around a blocked destructive command. `git rm -r`, `rm -rf` and `Remove-Item -Recurse` are blocked by Paul's user-level GateGuard hook. Do not retry or work around it: give Paul the exact command, the folder and the window to run it in, and wait.
 
 <!-- BEGIN:nextjs-agent-rules -->

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { readCorpusFile } from '../corpus';
+import { makePdf } from '../test-pdf';
 import { extract } from './extract';
 
 const bytes = (text: string) => new TextEncoder().encode(text);
@@ -81,6 +82,45 @@ describe('extract', () => {
     const yaml = await extract('md', bytes('---\ntitle: x\ntags:\n  - a\n---\n# Title\nBody.'));
     expect(yaml.parts).toHaveLength(1);
     expect(yaml.parts[0].paragraphs[0].text).toBe('# Title\nBody.');
+  });
+
+  it('drops lines that hold only an image, so a heading followed only by an image merges into the next section', async () => {
+    const { parts } = await extract('md', bytes('# A\n\n## Flow Diagram\n![Flow](./a.svg)\n[![Linked](./b.svg)](https://example.test)\n\n## Next\nText here with ![inline](./c.svg) kept.'));
+    expect(parts).toHaveLength(1);
+    expect(parts[0].locator).toBe('§ A › Next');
+    const text = parts[0].paragraphs.map(({ text: paragraph }) => paragraph).join('\n');
+    expect(text).toContain('## Flow Diagram');
+    expect(text).not.toContain('a.svg');
+    expect(text).not.toContain('b.svg');
+    expect(text).toContain('![inline](./c.svg)');
+  });
+
+  it('keeps an image line inside a code fence', async () => {
+    const { parts } = await extract('md', bytes('# A\n```\n![x](y.svg)\n```\nAfter.'));
+    expect(parts[0].paragraphs.map(({ text }) => text).join('\n')).toContain('![x](y.svg)');
+  });
+
+  it('drops a line repeated at the edge of a third of the pages, and keeps one repeated on fewer', async () => {
+    const pages = Array.from({ length: 12 }, (_, i) => {
+      const word = String.fromCharCode(97 + i).repeat(6);
+      const body = Array.from({ length: 6 }, (_, j) => `Body ${word} ${'xyz'.charAt(j % 3)} line ${j}.`);
+      const header = `ACME GUIDE v 1.0 page ${i + 1}`;
+      return i === 5
+        ? [`Intro ${word} text.`, ...body.slice(0, 3), header, ...body.slice(3), `Footer ${word} stays.`]
+        : [header, i < 3 ? 'SECTION BANNER' : `Intro ${word} text.`, ...body, `Footer ${word} stays.`];
+    });
+    const { parts } = await extract('pdf', makePdf(pages));
+    const all = parts.flatMap(({ paragraphs }) => paragraphs.map(({ text }) => text)).join('\n');
+    expect(parts.map(({ locator }) => locator)).toEqual(pages.map((_, i) => `p. ${i + 1}`));
+    expect(all).not.toContain('ACME GUIDE');
+    expect(all).toContain('SECTION BANNER');
+    expect(all).toContain('Body aaaaaa x line 0.');
+    expect(all).toContain('Footer llllll stays.');
+  });
+
+  it('does not strip anything from a PDF of fewer than three pages', async () => {
+    const { parts } = await extract('pdf', makePdf([['Same line.', 'Text A.'], ['Same line.', 'Text B.']]));
+    expect(parts.flatMap(({ paragraphs }) => paragraphs.map(({ text }) => text)).join('\n')).toContain('Same line.');
   });
 
   it('removes NUL characters, which Postgres rejects', async () => {

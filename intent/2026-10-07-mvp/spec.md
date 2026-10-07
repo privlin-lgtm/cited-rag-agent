@@ -3,7 +3,7 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
 
 ## Stack
 - **App:** Next.js 16.4.0 (App Router, Route Handlers on the Node runtime), React 19.3.0, TypeScript `~5.9.3`, Tailwind CSS 4 with a few shadcn/ui components. Every version is pinned exactly except TypeScript (`~5.9.3`, patch updates only), and the lockfile is committed. Lint runs through the ESLint CLI, since `next lint` is gone in 16. Hosted on Vercel (Paul's Pro account), with functions in `fra1`.
-- **Database:** Postgres with pgvector, one Neon Free project per environment in `aws-eu-central-1` (D1). The app connects over the pooled endpoint with `prepare: false`; migrations run over the direct endpoint, which is reachable over IPv4. Neon runs Postgres 18; tests run on PGlite's Postgres 17, and the schema uses nothing that differs between them. `MIGRATION_DATABASE_URL` is read only by `scripts/migrate.ts`. `lib/db.ts` drops the `channel_binding` URL parameter, which postgres.js doesn't support; `sslmode=require` keeps TLS on.
+- **Database:** Postgres with pgvector, one Neon Free project per environment in `aws-eu-central-1` (D1). The app connects over the pooled endpoint with `prepare: false`; migrations run over the direct endpoint, which is reachable over IPv4. Neon runs Postgres 18 with pgvector 0.8.6 (Sandbox: 18.6); tests run on PGlite 0.5.8, which is Postgres 18.3 with pgvector 0.8.1, and the schema uses nothing that differs between them. Both have the iterative HNSW scans that pgvector 0.8.0 added. `MIGRATION_DATABASE_URL` is read only by `scripts/migrate.ts`. `lib/db.ts` drops the `channel_binding` URL parameter, which postgres.js doesn't support; `sslmode=require` keeps TLS on.
   - **If D1 goes to Supabase instead:** the app uses the transaction pooler (port 6543, `prepare: false`), and migrations use the session pooler (port 5432, user `postgres.<ref>`, host copied from the dashboard). Never the direct host, which is IPv6-only and unreachable from GitHub runners and Vercel (c).
 - **Storage interface** (a.1), the prototype's `VectorStore` idea at the right size:
   - `lib/db.ts` exports `type Db = { query<T>(text: string, params?: unknown[]): Promise<T[]>; transaction<T>(fn: (tx: Db) => Promise<T>): Promise<T> }`.
@@ -16,7 +16,7 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
 
 ## Features
 1. **Demo corpus.** The cross-border payments pack, committed under `corpus/files/` (D4).
-   - **The manifest:** `corpus/manifest.json` records each file's id, title, filename, kind, source URL, licence, attribution line and SHA-256, plus an optional `note` for a fact a reader needs, such as the eCFR date or the Mojaloop commit. A licence file that ships with a source (Mojaloop's `LICENSE.md`) is listed with its hash under `licenceFiles`, because it is not a document to ingest.
+   - **The manifest:** `corpus/manifest.json` records each file's id, title, filename, kind, source URL, licence, licence URL (when the licence has a page of its own), attribution line and SHA-256, plus an optional `note` for a fact a reader needs, such as the eCFR date or the Mojaloop commit. A licence file that ships with a source (Mojaloop's `LICENSE.md`) is listed with its hash under `licenceFiles`, because it is not a document to ingest.
    - **Contents:**
      - the CFPB Remittance Transfers Small Entity Compliance Guide, version 5.0 (PDF);
      - the CFPB Remittance Transfer Rule Examination Procedures (PDF);
@@ -31,6 +31,10 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
    - **Scanned PDFs:** a PDF that yields no text is rejected with a message saying OCR is out of scope.
 3. **Ingest.**
    - **Extraction:** PDFs through `unpdf` `extractText(data, { mergePages: false })`, which returns per-page text and `totalPages`; add `serverExternalPackages: ['unpdf']` only if the bundler needs it. Markdown is split by headings, plain text by paragraphs.
+   - **Cleanup (ingest version 2):**
+     - Markdown lines that hold only an image (also when wrapped in a link) are dropped, and a section left with only headings merges into the next one, as a heading-only section always does.
+     - In a PDF, take the first three and last three non-empty lines of every page, collapse their whitespace and replace each run of digits with `#`. A line found that way on at least a third of the pages, and on at least three, is a running header or footer, and it is dropped wherever it appears on a page, because extraction sometimes puts a header mid-page. (One half of the pages missed PSD2, whose odd and even pages carry two mirrored headers.)
+     - Tables stay as extracted; the eval decides whether they need more.
    - **Chunking:** paragraphs are packed into chunks of about 400 estimated tokens, with a ceiling of 600 and an overlap of one paragraph (capped at about 80 tokens). A chunk never crosses a PDF page.
      - **Token estimate:** `Math.ceil(chars / 4)`. The ceiling sets retrieval granularity, not the embedder's limit (b.7).
      - **Locator:** every chunk has exactly one: `p. N` for PDF, the heading path for Markdown, `lines A–B` for text.
@@ -40,12 +44,12 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
      - Otherwise, in one transaction, the old row is deleted (its chunks cascade) and the document is ingested again.
    - **Report:** for each document, its pages, chunks and the Voyage `usage.total_tokens`.
 4. **Retrieval.**
-   - **Semantic search:** cosine distance over an HNSW index.
-   - **Keyword search:** Postgres full text (`websearch_to_tsquery`) over a generated `tsvector`.
-   - **Both:** can be filtered to selected documents, and return chunk ID, filename, locator, content and score.
+   - **Semantic search:** cosine distance over an HNSW index. It runs in a transaction with `hnsw.iterative_scan = relaxed_order` and re-orders its results (a materialized CTE ordered by `distance + 0`), so a filter to one small, distant document still returns `k` hits, or all its chunks when it has fewer.
+   - **Keyword search:** Postgres full text (`websearch_to_tsquery`) over a generated `tsvector`. It ANDs plain terms, so the tool asks Claude for one to three exact terms or a quoted phrase, and allows `OR` between alternatives.
+   - **Both:** take a required list of document ids, so no caller can search every collection by leaving the list out (an empty list returns no hits without a query), and return chunk ID, document ID, filename, locator, content and score.
 5. **Sentence blocks** (b.2). `splitSentences(text)` in `lib/agent/sentences.ts` is pure and deterministic:
    - **Base:** `Intl.Segmenter('en', { granularity: 'sentence' })`.
-   - **Rejoin:** a segment is joined to the next when it ends with an abbreviation or citation fragment: `U.S.C.`, `C.F.R.`, `U.S.`, `e.g.`, `i.e.`, `etc.`, `No.`, `Art.`, `para.`, `Inc.`, `Ltd.`, `§`, or a bare number followed by a period.
+   - **Rejoin:** a segment is joined to the next when it ends with an abbreviation or citation fragment: `U.S.C.`, `C.F.R.`, `U.S.`, `e.g.`, `i.e.`, `etc.`, `No.`, `Art.`, `para.`, `Inc.`, `Ltd.`, `§`, or a segment that is itself a bare number followed by a period (a list numeral such as `1.`; a sentence that merely ends in a number does not join the next one).
    - **Break:** a new block starts at any line that begins with a list marker or looks like a table row.
    - **Long blocks:** any block over 80 words is split at `;` or `:`, then every 60 words.
    - **Tested invariant:** joining the blocks with single spaces gives the chunk text with its whitespace collapsed.
@@ -80,8 +84,8 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
 7. **Visible steps.** The answer route streams newline-delimited JSON events:
    - `step`: `{ round, reason, tool, input, hits: [{ file, locator, score }], fallback? }`. The `reason` is the progress text Claude returned before the tool call, when there is any.
    - `answer`: text deltas.
-   - `citations`: the check results.
-   - `done`: `{ inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, costUsd, latencyMs }`, with the cost taken from `lib/pricing.ts`.
+   - `citations`: `{ status, segments, results, excerpts }`: the final answer in text segments, each with the citations attached to it, the check result of every citation, and the excerpts. The client keeps streamed `answer` text as pending until the first `step` of a round arrives (that text was the step's reason) and replaces it with the segments at `citations`.
+   - `done`: `{ model, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, costUsd, latencyMs }`, with the cost taken from `lib/pricing.ts`.
    - `error`.
    The UI renders them as a live timeline.
 8. **Checked citations** (b.3).
@@ -103,7 +107,7 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
       - `ask:ip:<hash>`: 15 an hour.
       - `upload:ip:<hash>`: 10 a day.
       - `anthropic:usd`: daily cost budget `DAILY_ANTHROPIC_BUDGET_USD`, default 1.00 (D2).
-      - `embed:tokens`: 2M a day.
+      - `embed:tokens`: 2M a day. Once it is reached, uploads are refused with the reset time, and `search_documents` uses keyword search for the rest of the day.
     - **Counting:** one atomic `insert … on conflict (bucket, window_start) do update set count = usage_windows.count + $n returning count`.
       - Questions and uploads are reserved before any model call, and they still count if the call fails.
       - Cost (in micro-dollars) and embedding tokens are added after each API call, from the response's `usage`.
@@ -135,7 +139,7 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
 - `GET /api/documents`: the corpus plus this session's uploads.
 - `DELETE /api/documents/:id`: the session's own uploads only.
 - `GET /api/health`: `{ env, database, lastMigration }`, where `database` is the first 12 hex characters of the SHA-256 of `DATABASE_URL`'s host name, so environments are told apart without publishing the host.
-- `GET /api/cron/cleanup`: a Vercel Cron job, run hourly, that deletes uploads older than 24 h and expired limit windows. It is protected by `CRON_SECRET`.
+- `GET /api/cron/cleanup`: a Vercel Cron job, run hourly, that deletes uploads older than 24 h and expired limit windows. It is protected by `CRON_SECRET`. Vercel calls cron jobs on the production deployment only, so on the Sandbox and QA previews the job never runs by itself (M5 adds another trigger).
 
 ## Schema
 Every column below serves a feature above; nothing is "just in case".
@@ -203,10 +207,10 @@ create table usage_windows (
 OCR; MongoDB; accounts and logins; storing agent runs or chat history; re-ranking models; streaming partial citations; i18n; native mobile.
 
 ## Concerns
-1. **Public demo on paid keys.** Covered by the limits in feature 10 and the workspace limit. Voyage has budget alerts, not hard caps. The project `cited-rag-agent` has a $5 monthly alert (email only) and there is no card on the account, so spend stays at $0 against 200M free tokens.
+1. **Public demo on paid keys.** Covered by the limits in feature 10 and the workspace limit. Voyage has budget alerts, not hard caps. The account now has a payment method, which unlocks the standard rate limits; the 200M free tokens still apply. Spend is controlled by the app's 2M-token daily embedding budget (feature 10) and the project's $5 monthly alert (email only); Voyage itself has no hard cap.
 2. **Licences.**
    - CFPB and eCFR texts are US federal works in the public domain (17 U.S.C. §105).
-   - PSD2 is reused from EUR-Lex with the source acknowledged. The exact acknowledgement wording is confirmed against EUR-Lex's legal notice and recorded in the manifest and README before the file is committed.
+   - PSD2 is reused from EUR-Lex with the source acknowledged. The manifest records the acknowledgement wording and links EUR-Lex's legal notice; the wording is still to be checked against that notice, and repeated in the README, before M6.
    - Mojaloop's docs are Apache-2.0 apart from the one page noted under feature 1. The repository ships `LICENSE.md` and no NOTICE, so `LICENSE.md` goes beside the files.
 3. **Corpus sources that refuse scripted downloads.** Paul downloads that file once in a browser. The file is committed, so CI never depends on the source.
 4. **Vercel request limit.** Bodies are capped at 4.5 MB, hence the 4 MB upload limit.
@@ -219,6 +223,6 @@ OCR; MongoDB; accounts and logins; storing agent runs or chat history; re-rankin
 - **D1 Hosting:** Neon Free, one project per environment, $0 a month. The alternative was Supabase: Sandbox on the free slot, plus QA and production on Pro in a separate organisation at about $35 a month. Supabase's free projects also pause after a week without traffic.
 - **D2 Anthropic spend:** the workspace monthly limit is $20, set at setup to leave room in the organisation's $50 limit for Paul's other projects, and the app's daily budget is $1.00 (`DAILY_ANTHROPIC_BUDGET_USD`), raised through that env var on interview days.
 - **D3 Production release:** the pipeline migrates and then deploys, after Paul approves in GitHub. Vercel's automatic deploys from `master` are off.
-- **D4 Corpus files:** committed to the repo (about 5 MB), with their licences beside them.
+- **D4 Corpus files:** committed to the repo (3.4 MB), with their licences beside them.
 - **D5 Preview protection:** Vercel Deployment Protection is off for this project.
 - **D6 Uploads on production:** open, within the limits in feature 10.

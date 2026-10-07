@@ -9,11 +9,11 @@ Times are Israel time. The build runs in Claude Code on Paul's machine, from the
 | M0 | Intent, spec, plan, plus the build session's review of the spec and plan (`review-2026-10-07.md`) and these revisions; gate commits on `flow/mvp` | `flow/mvp` → `master` (PR #9) | Wed 7 Oct 12:00–14:00 | **Accept the intent; approve the spec (with decisions D1–D6) and the plan; merge** |
 | M1 | Scaffold and guardrails (workflow Phase 3a): the `sandbox` branch; the Python code leaves the tree; Next.js app; one command each for lint, typecheck, test and build; the `Db` interface with both drivers; `0001_init.sql` and `scripts/migrate.ts`; `/api/health`; the agent files in the appendix; CI; Dependabot | `m1-scaffold` → `sandbox` | Wed 14:00–16:30 | **Manual approvals until the hooks are proven; review and merge by 17:30, then close Dependabot PRs #1–#8 (or let the M2 session do it)** |
 | S1 | Accounts and keys: Neon Sandbox project; Anthropic workspace (limit $20) and key; Voyage key (no card); Vercel project (region `fra1`, protection off, env vars); `.env.local` copied into the secrets archive | n/a | Wed 16:30–17:45, or 20:00 before M2 | **About 30 min, steps from the planning session** |
-| M2 | The corpus pack committed with manifest and hashes; extractors, chunker, sentence splitter, Voyage client, versioned ingest; semantic and keyword search; the real corpus ingested into Sandbox | `m2-ingest` → `sandbox` | Wed 20:15–23:30, after class | **Start the session, approve its plan, merge** |
+| M2 | The corpus pack committed with manifest and hashes; extractors, chunker, sentence splitter, Voyage client, versioned ingest; semantic and keyword search; the real corpus ingested into Sandbox | `m2-ingest` → `sandbox` | Wed 7 Oct, about 16:30–18:00 (it ran in the afternoon, before class) | **Start the session, approve its plan, merge** |
 | M3 | Agent loop (Fable designs it in plan mode, Sonnet builds it), NDJSON stream, citation check, three-column UI, example questions, limits and budgets, upload, cleanup cron, environment badge; deployed to the Sandbox preview | `m3-agent` → `sandbox` | Thu 8 Oct 08:30–12:30 | **Start the session, review, merge** |
 | ★ | **FIRST CUT:** M1–M3 on the Sandbox preview URL with the real corpus | | **Thu 8 Oct ~13:00** | **Walk-through 13:00–16:00 with same-day fixes; apply Thu evening** |
 | M4 | Eval set (12–15 questions), `npm run eval` (hit@1/3/5, MRR), CI job with a pgvector service, job-summary table, threshold set from the first run | `m4-evals` → `sandbox` | Mon 12 Oct | **About 1.5 h of sessions plus review** |
-| M5 | Neon QA and production projects; GitHub Environments with production gated on Paul's approval; Vercel env scoping and `git.deploymentEnabled.master: false`; `pipeline.yml` (migrate, then ingest; production migrate, then deploy); first promotion sandbox → qa → master | `m5-environments` → `sandbox`, then promotion PRs | Mon 12 – Tue 13 Oct | **About 40 min of setup, plus the approvals in each promotion** |
+| M5 | Neon QA and production projects; GitHub Environments with production gated on Paul's approval; Vercel env scoping and `git.deploymentEnabled.master: false`; `pipeline.yml` (migrate, then ingest; production migrate, then deploy), plus a trigger for `/api/cron/cleanup` on Sandbox and QA, because Vercel runs cron jobs on production only; first promotion sandbox → qa → master | `m5-environments` → `sandbox`, then promotion PRs | Mon 12 – Tue 13 Oct | **About 40 min of setup, plus the approvals in each promotion** |
 | M6 | README (architecture, running locally, "Local secrets" with `<!-- yanshuf-secrets -->`), demo script, responsive and Lighthouse pass, Claude PR review (`/install-github-app`) | `m6-readme` → `sandbox` → promotion | Tue 13 – Wed 14 Oct | **Final walk-through Wed 14 Oct** |
 
 The full set is due Wed 14 Oct, with Thu 15 as buffer. Sunday 11 is TriviaFoundry's launch, so nothing is planned here that day.
@@ -29,13 +29,14 @@ Until the first promotion in M5, `master` holds only the chain. The first cut li
   - `app/api/{ask,upload,documents,documents/[id],health,cron/cleanup}/route.ts`
 - **Library:**
   - `lib/{env,db,embed,search,limits,pricing}.ts`
+  - `lib/{corpus,manifest,documents,session,upload,api,deps,run-state,utils}.ts`, the test helpers `lib/{fake-embedder,test-pdf}.ts` and `lib/agent/test-setup.ts`, and the upload fixture `lib/fixtures/acme-pay-terms.pdf`
   - `lib/ingest/{extract,chunk,index}.ts`
   - `lib/agent/{loop,tools,prompt,sentences,citations}.ts`
 - **Data:**
   - `db/migrations/0001_init.sql`
   - `corpus/manifest.json`, `corpus/files/*` (committed), plus the Mojaloop `LICENSE.md` (the repository ships no NOTICE)
   - `evals/questions.json`
-- **Scripts:** `scripts/{migrate,corpus-fetch,ingest-corpus,eval}.ts`
+- **Scripts:** `scripts/{migrate,corpus-fetch,ingest-corpus,retrieval-check,smoke-sql,eval}.ts`
 - **Pipelines:** `.github/workflows/{ci,evals,pipeline}.yml`, `.github/dependabot.yml`
 - **Agent setup:** `AGENTS.md`, `CLAUDE.md`, `REVIEW.md`, `.claude/settings.json`, `.claude/hooks/{no-placeholders,production-gate}.mjs`, `.claude/agents/{verifier,architect}.md`
 - **Config and docs:** `package.json`, `package-lock.json`, `tsconfig.json`, `eslint.config.mjs`, `vitest.config.ts`, `postcss.config.mjs`, `app/globals.css`, `vercel.json`, `.env.example`, `.gitattributes`, `.gitignore`, `.worktreeinclude`, `README.md`. Scripts run through `tsx` with `--env-file-if-exists=.env.local`.
@@ -96,7 +97,7 @@ From nothing to the spec's four tables:
 
 ## Risks
 1. **M3 slips past Thursday morning:** the walk-through and the application move to Thursday afternoon; the planning session flags it as soon as it's clear.
-2. **Voyage rate limits:** with no payment method on the account, Voyage allows 3 requests and 10K tokens a minute (its 429 reply says so). The standard limits for `voyage-4` (2,000 requests and 8M tokens a minute) need a card, and the 200M free tokens apply either way. The M2 ingest therefore batches by about 3K estimated tokens, starts at most one request every 21 s and keeps exponential backoff on 429s. The corpus is about 0.2M estimated tokens, so a first ingest takes about 25 minutes. Each question's query embedding is one request, so with no card the app can embed about three questions a minute before the keyword fallback (spec feature 6) takes over. Whether to add a card is Paul's decision; with one, the spend cap in spec concern 1 is the budget alert only.
+2. **Voyage rate limits:** the account now has a payment method, so `voyage-4` runs at the standard limits (2,000 requests and 8M tokens a minute) and the 200M free tokens still apply. Without a card the limits were 3 requests and 10K tokens a minute (Voyage's 429 reply says so), which stretched M2's first ingest to about 25 minutes; with the card, a full ingest of the 0.18M-token corpus takes about a minute. Ingest keeps exponential backoff on 429s. A question's query embedding makes one attempt with a 5 s deadline and falls back to keyword search (spec feature 6). The app's 2M-token daily embedding budget and the $5 project alert are the only spend controls, because Voyage has no hard cap.
 3. **A corpus source refuses scripted downloads:** Paul downloads it once in a browser into `corpus/files/`, and the hash goes into the manifest.
 4. **Multi-call agent latency on Vercel:** `maxDuration` of 120 s (Pro allows up to 800), streaming so progress is visible, and the round cap.
 5. **PDF extraction on the CFPB guide's tables:** inspect the extracted text in M2 and adjust the packing and the splitter's table-row rule.

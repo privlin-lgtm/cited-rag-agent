@@ -38,6 +38,7 @@
       "kind": "pdf",
       "sourceUrl": "https://publications.europa.eu/resource/cellar/dd85ef2e-a953-11e5-b528-01aa75ed71a1.0006.01/DOC_1",
       "licence": "Reuse authorised under Commission Decision 2011/833/EU",
+      "licenceUrl": "https://eur-lex.europa.eu/content/legal-notice/legal-notice.html",
       "attribution": "© European Union, https://eur-lex.europa.eu/, 1998–2026. Only the Official Journal of the European Union is authentic.",
       "sha256": "adb1a81b9cecaf8caba510cf4c84b93bf607c7ccef6475777e981c957fae851b",
       "note": "Same Official Journal text as EUR-Lex CELEX:32015L2366 (https://eur-lex.europa.eu/eli/dir/2015/2366/oj). Downloaded from the Publications Office's Cellar because EUR-Lex challenges scripted downloads."
@@ -48,8 +49,9 @@
       "filename": "mojaloop/generic-transaction-patterns.md",
       "kind": "md",
       "sourceUrl": "https://raw.githubusercontent.com/mojaloop/documentation/cfa8f5187f7a27eaa406c564a4b129e3d3253cae/docs/technical/api/fspiop/generic-transaction-patterns.md",
-      "licence": "CC BY-ND 4.0, as stated in the page's own front matter (the repository's LICENSE.md is Apache-2.0)",
-      "attribution": "© Mojaloop Foundation; Ericsson, Huawei, Mahindra-Comviva, Telepin, and the Bill & Melinda Gates Foundation",
+      "licence": "CC BY-ND 4.0",
+      "licenceUrl": "https://creativecommons.org/licenses/by-nd/4.0/",
+      "attribution": "Ericsson, Huawei, Mahindra-Comviva, Telepin, and the Bill & Melinda Gates Foundation",
       "sha256": "13a1f5833e3b96b23ca4732b3edf7fd6734679e3fb5968f8b731599529d91601",
       "note": "mojaloop/documentation at commit cfa8f5187f7a27eaa406c564a4b129e3d3253cae, path docs/technical/api/fspiop/generic-transaction-patterns.md. This page's front matter says \"Attribution-NoDerivatives 4.0 International (CC BY-ND 4.0)\", unlike the Apache-2.0 repository licence. The file is committed unmodified."
     },
@@ -60,6 +62,7 @@
       "kind": "md",
       "sourceUrl": "https://raw.githubusercontent.com/mojaloop/documentation/cfa8f5187f7a27eaa406c564a4b129e3d3253cae/docs/technical/technical/account-lookup-service/README.md",
       "licence": "Apache-2.0",
+      "licenceUrl": "https://www.apache.org/licenses/LICENSE-2.0",
       "attribution": "© Mojaloop Foundation",
       "sha256": "3cfe1880a8605dbf743e9632df5da7625a1b689d4655cc40de6853670a9d8b66",
       "note": "mojaloop/documentation at commit cfa8f5187f7a27eaa406c564a4b129e3d3253cae, path docs/technical/technical/account-lookup-service/README.md."
@@ -71,6 +74,7 @@
       "kind": "md",
       "sourceUrl": "https://raw.githubusercontent.com/mojaloop/documentation/cfa8f5187f7a27eaa406c564a4b129e3d3253cae/docs/technical/reference-architecture/boundedContexts/transfers/index.md",
       "licence": "Apache-2.0",
+      "licenceUrl": "https://www.apache.org/licenses/LICENSE-2.0",
       "attribution": "© Mojaloop Foundation",
       "sha256": "ff888dd3beae916e0817cacb1fd4ab9e8d695975f89ddf8e9e43c41bdb1d854b",
       "note": "mojaloop/documentation at commit cfa8f5187f7a27eaa406c564a4b129e3d3253cae, path docs/technical/reference-architecture/boundedContexts/transfers/index.md."
@@ -82,6 +86,7 @@
       "kind": "md",
       "sourceUrl": "https://raw.githubusercontent.com/mojaloop/documentation/cfa8f5187f7a27eaa406c564a4b129e3d3253cae/docs/technical/reference-architecture/boundedContexts/quotingAgreement/index.md",
       "licence": "Apache-2.0",
+      "licenceUrl": "https://www.apache.org/licenses/LICENSE-2.0",
       "attribution": "© Mojaloop Foundation",
       "sha256": "d4b2e7807849e60e2d4e3149beb3fdb8850dd64a040566991b856f0f25729028",
       "note": "mojaloop/documentation at commit cfa8f5187f7a27eaa406c564a4b129e3d3253cae, path docs/technical/reference-architecture/boundedContexts/quotingAgreement/index.md."
@@ -93,6 +98,7 @@
       "kind": "md",
       "sourceUrl": "https://raw.githubusercontent.com/mojaloop/documentation/cfa8f5187f7a27eaa406c564a4b129e3d3253cae/docs/adoption/HubOperations/Settlement/settlement-basic-concepts.md",
       "licence": "Apache-2.0",
+      "licenceUrl": "https://www.apache.org/licenses/LICENSE-2.0",
       "attribution": "© Mojaloop Foundation",
       "sha256": "21e0023c998b7de90089843768eb6f355e5673ac6232cf2659520c436ae95e0f",
       "note": "mojaloop/documentation at commit cfa8f5187f7a27eaa406c564a4b129e3d3253cae, path docs/adoption/HubOperations/Settlement/settlement-basic-concepts.md."
