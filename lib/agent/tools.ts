@@ -94,7 +94,7 @@ export const runTool = async ({ db, embed, scope }: ToolContext, name: string, r
   if (name === 'search_documents' || name === 'keyword_search') {
     const args = parsed.data as { query?: string; terms?: string; k: number; document_ids?: string[] };
     const ids = effectiveIds(args.document_ids, scope);
-    const input = { ...args, document_ids: ids };
+    const input = { ...args, document_ids: args.document_ids?.length ? ids : undefined };
     if (args.document_ids?.length && !ids.length) return failed(input, NOT_IN_SCOPE);
     if (name === 'keyword_search') return asRun(input, await keywordSearch(db, args.terms ?? '', { k: args.k, documentIds: ids }));
     const embedded = await embed([args.query ?? ''], 'query').then(
