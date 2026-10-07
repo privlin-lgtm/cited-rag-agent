@@ -1,4 +1,4 @@
-# Plan: cited-rag-agent  (from spec.md, 2026-10-07) · Status: draft
+# Plan: cited-rag-agent  (from spec.md, 2026-10-07) · Status: approved
 Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`).
 
 Times are Israel time. The build runs in Claude Code on Paul's machine, from the repo root `C:\Users\privlin\Projects\personal-knowledge-RAG-system`. The planning session writes the prompts and Paul runs them. Each milestone is one PR; the agent pushes named branches and opens PRs, and Paul's merge is the release.
