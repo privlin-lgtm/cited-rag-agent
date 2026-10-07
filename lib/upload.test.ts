@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { migrate } from '../scripts/migrate';
 import { pgliteDb, type Db } from './db';
@@ -75,6 +76,14 @@ describe('ingestUpload', () => {
     await ingestUpload(db, fakeEmbedder, 'sess1', 'notes.md', bytes('# A\nOne.'));
     await ingestUpload(db, fakeEmbedder, 'sess2', 'notes.md', bytes('# A\nTwo.'));
     expect(await db.query('select collection from documents order by collection')).toEqual([{ collection: 'upload:sess1' }, { collection: 'upload:sess2' }]);
+  });
+
+  it('ingests the committed two-page PDF fixture with its text on each page', async () => {
+    const { id } = await ingestUpload(db, fakeEmbedder, 'sess1', 'acme-pay-terms.pdf', new Uint8Array(await readFile(new URL('./fixtures/acme-pay-terms.pdf', import.meta.url))));
+    const rows = await db.query<{ locator: string; content: string }>('select locator, content from chunks where document_id = $1::uuid order by ord', [id]);
+    expect(rows.map(({ locator }) => locator)).toEqual(['p. 1', 'p. 2']);
+    expect(rows[0].content).toContain('within 12 days of sending it');
+    expect(rows[1].content).toContain('flat fee of 3.50 euro');
   });
 
   it('ingests a text PDF page by page', async () => {
