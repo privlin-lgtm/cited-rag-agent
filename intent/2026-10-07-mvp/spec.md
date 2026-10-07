@@ -1,4 +1,4 @@
-# Spec: cited-rag-agent  (from intent.md, 2026-10-07) · Status: draft
+# Spec: cited-rag-agent  (from intent.md, 2026-10-07) · Status: approved
 Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); references such as (b.3) point to its items. Decisions D1–D6 at the end are confirmed by approving this spec.
 
 ## Stack
