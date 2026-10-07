@@ -10,13 +10,16 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "migrate": "tsx --env-file-if-exists=.env.local scripts/migrate.ts"
+    "migrate": "tsx --env-file-if-exists=.env.local scripts/migrate.ts",
+    "corpus:fetch": "tsx scripts/corpus-fetch.ts",
+    "ingest:corpus": "tsx --env-file-if-exists=.env.local scripts/ingest-corpus.ts"
   },
   "dependencies": {
     "next": "16.4.0",
     "postgres": "3.4.9",
     "react": "19.3.0",
     "react-dom": "19.3.0",
+    "unpdf": "1.8.1",
     "zod": "4.6.5"
   },
   "devDependencies": {

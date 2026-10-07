@@ -16,13 +16,13 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
 
 ## Features
 1. **Demo corpus.** The cross-border payments pack, committed under `corpus/files/` (D4).
-   - **The manifest:** `corpus/manifest.json` records each file's title, filename, kind, source URL, licence, attribution line and SHA-256.
+   - **The manifest:** `corpus/manifest.json` records each file's id, title, filename, kind, source URL, licence, attribution line and SHA-256, plus an optional `note` for a fact a reader needs, such as the eCFR date or the Mojaloop commit. A licence file that ships with a source (Mojaloop's `LICENSE.md`) is listed with its hash under `licenceFiles`, because it is not a document to ingest.
    - **Contents:**
      - the CFPB Remittance Transfers Small Entity Compliance Guide, version 5.0 (PDF);
      - the CFPB Remittance Transfer Rule Examination Procedures (PDF);
      - 12 CFR part 1005 subpart B (Regulation E remittance transfers), as plain text built from the eCFR (txt);
-     - Directive (EU) 2015/2366 (PSD2), the Official Journal PDF from EUR-Lex (PDF);
-     - four or five Mojaloop documentation pages on transfers, quotes, party lookup and settlement, from `mojaloop/documentation` at a pinned commit (md). Mojaloop's `LICENSE` and `NOTICE` sit beside them.
+     - Directive (EU) 2015/2366 (PSD2), the Official Journal PDF (PDF). It comes from the Publications Office's Cellar, because EUR-Lex answers scripted requests with a challenge; it is the same text as EUR-Lex CELEX:32015L2366;
+     - five Mojaloop documentation pages on transfers, quotes, party lookup and settlement, from `mojaloop/documentation` at a pinned commit (md). The repository ships `LICENSE.md` and no NOTICE, so `LICENSE.md` sits beside them. One page, the FSPIOP generic transaction patterns, states CC BY-ND 4.0 in its own front matter, and the manifest says so.
    - **Refreshing:** `npm run corpus:fetch` downloads every file from its source URL and rewrites the hashes. It builds the pack once and refreshes it later; CI never calls it. A unit test checks every committed file against its manifest hash.
    - **In the UI:** each document's licence and source are shown.
 2. **Upload.**
@@ -207,7 +207,7 @@ OCR; MongoDB; accounts and logins; storing agent runs or chat history; re-rankin
 2. **Licences.**
    - CFPB and eCFR texts are US federal works in the public domain (17 U.S.C. §105).
    - PSD2 is reused from EUR-Lex with the source acknowledged. The exact acknowledgement wording is confirmed against EUR-Lex's legal notice and recorded in the manifest and README before the file is committed.
-   - Mojaloop's docs are Apache-2.0, so its `LICENSE` and `NOTICE` go beside the files.
+   - Mojaloop's docs are Apache-2.0 apart from the one page noted under feature 1. The repository ships `LICENSE.md` and no NOTICE, so `LICENSE.md` goes beside the files.
 3. **Corpus sources that refuse scripted downloads.** Paul downloads that file once in a browser. The file is committed, so CI never depends on the source.
 4. **Vercel request limit.** Bodies are capped at 4.5 MB, hence the 4 MB upload limit.
 5. **Paul's constraint block** applies to app code and hook scripts alike.

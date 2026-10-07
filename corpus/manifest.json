@@ -1,0 +1,108 @@
+{
+  "documents": [
+    {
+      "id": "cfpb-small-entity-guide",
+      "title": "CFPB Remittance Transfers Small Entity Compliance Guide (version 5.0)",
+      "filename": "cfpb_remittance-transfers_small-entity-compliance-guide.pdf",
+      "kind": "pdf",
+      "sourceUrl": "https://files.consumerfinance.gov/f/documents/cfpb_remittance-transfers_small-entity-compliance-guide.pdf",
+      "licence": "Public domain (U.S. Government work, 17 U.S.C. §105)",
+      "attribution": "Consumer Financial Protection Bureau",
+      "sha256": "ed3226f4b5eebf5e7bdb17bcc4ae58fa5750f28a561645d00722360a8f380bff"
+    },
+    {
+      "id": "cfpb-exam-procedures",
+      "title": "CFPB Remittance Transfer Rule Examination Procedures",
+      "filename": "cfpb_remittance-transfer-examination-procedures.pdf",
+      "kind": "pdf",
+      "sourceUrl": "https://files.consumerfinance.gov/f/documents/cfpb_remittance-transfer-examination-procedures.pdf",
+      "licence": "Public domain (U.S. Government work, 17 U.S.C. §105)",
+      "attribution": "Consumer Financial Protection Bureau",
+      "sha256": "fe559b8253459e9029cd82633515506c1ad5b4c02eef83822f114984a8242368"
+    },
+    {
+      "id": "regulation-e-subpart-b",
+      "title": "12 CFR part 1005, subpart B (Regulation E, remittance transfers)",
+      "filename": "regulation-e-subpart-b.txt",
+      "kind": "txt",
+      "sourceUrl": "https://www.ecfr.gov/api/versioner/v1/full/2026-10-05/title-12.xml?part=1005&subpart=B",
+      "licence": "Public domain (U.S. Government work, 17 U.S.C. §105)",
+      "attribution": "eCFR (unofficial editorial compilation), Office of the Federal Register",
+      "sha256": "84ea1c30779886c0a986e4a2ad867f6cbc7b6af7e763733a4debe811615dc65a",
+      "note": "eCFR text as of 2026-10-05, converted from the eCFR XML to plain text."
+    },
+    {
+      "id": "psd2-directive-2015-2366",
+      "title": "Directive (EU) 2015/2366 (PSD2)",
+      "filename": "directive-eu-2015-2366-psd2.pdf",
+      "kind": "pdf",
+      "sourceUrl": "https://publications.europa.eu/resource/cellar/dd85ef2e-a953-11e5-b528-01aa75ed71a1.0006.01/DOC_1",
+      "licence": "Reuse authorised under Commission Decision 2011/833/EU",
+      "attribution": "© European Union, https://eur-lex.europa.eu/, 1998–2026. Only the Official Journal of the European Union is authentic.",
+      "sha256": "adb1a81b9cecaf8caba510cf4c84b93bf607c7ccef6475777e981c957fae851b",
+      "note": "Same Official Journal text as EUR-Lex CELEX:32015L2366 (https://eur-lex.europa.eu/eli/dir/2015/2366/oj). Downloaded from the Publications Office's Cellar because EUR-Lex challenges scripted downloads."
+    },
+    {
+      "id": "mojaloop-generic-transaction-patterns",
+      "title": "Mojaloop FSPIOP API: Generic Transaction Patterns",
+      "filename": "mojaloop/generic-transaction-patterns.md",
+      "kind": "md",
+      "sourceUrl": "https://raw.githubusercontent.com/mojaloop/documentation/cfa8f5187f7a27eaa406c564a4b129e3d3253cae/docs/technical/api/fspiop/generic-transaction-patterns.md",
+      "licence": "CC BY-ND 4.0, as stated in the page's own front matter (the repository's LICENSE.md is Apache-2.0)",
+      "attribution": "© Mojaloop Foundation; Ericsson, Huawei, Mahindra-Comviva, Telepin, and the Bill & Melinda Gates Foundation",
+      "sha256": "13a1f5833e3b96b23ca4732b3edf7fd6734679e3fb5968f8b731599529d91601",
+      "note": "mojaloop/documentation at commit cfa8f5187f7a27eaa406c564a4b129e3d3253cae, path docs/technical/api/fspiop/generic-transaction-patterns.md. This page's front matter says \"Attribution-NoDerivatives 4.0 International (CC BY-ND 4.0)\", unlike the Apache-2.0 repository licence. The file is committed unmodified."
+    },
+    {
+      "id": "mojaloop-account-lookup-service",
+      "title": "Mojaloop Account Lookup Service",
+      "filename": "mojaloop/account-lookup-service.md",
+      "kind": "md",
+      "sourceUrl": "https://raw.githubusercontent.com/mojaloop/documentation/cfa8f5187f7a27eaa406c564a4b129e3d3253cae/docs/technical/technical/account-lookup-service/README.md",
+      "licence": "Apache-2.0",
+      "attribution": "© Mojaloop Foundation",
+      "sha256": "3cfe1880a8605dbf743e9632df5da7625a1b689d4655cc40de6853670a9d8b66",
+      "note": "mojaloop/documentation at commit cfa8f5187f7a27eaa406c564a4b129e3d3253cae, path docs/technical/technical/account-lookup-service/README.md."
+    },
+    {
+      "id": "mojaloop-transfers-bounded-context",
+      "title": "Mojaloop Transfers Bounded Context",
+      "filename": "mojaloop/transfers-bounded-context.md",
+      "kind": "md",
+      "sourceUrl": "https://raw.githubusercontent.com/mojaloop/documentation/cfa8f5187f7a27eaa406c564a4b129e3d3253cae/docs/technical/reference-architecture/boundedContexts/transfers/index.md",
+      "licence": "Apache-2.0",
+      "attribution": "© Mojaloop Foundation",
+      "sha256": "ff888dd3beae916e0817cacb1fd4ab9e8d695975f89ddf8e9e43c41bdb1d854b",
+      "note": "mojaloop/documentation at commit cfa8f5187f7a27eaa406c564a4b129e3d3253cae, path docs/technical/reference-architecture/boundedContexts/transfers/index.md."
+    },
+    {
+      "id": "mojaloop-quoting-agreement-bounded-context",
+      "title": "Mojaloop Quoting and Agreement Bounded Context",
+      "filename": "mojaloop/quoting-agreement-bounded-context.md",
+      "kind": "md",
+      "sourceUrl": "https://raw.githubusercontent.com/mojaloop/documentation/cfa8f5187f7a27eaa406c564a4b129e3d3253cae/docs/technical/reference-architecture/boundedContexts/quotingAgreement/index.md",
+      "licence": "Apache-2.0",
+      "attribution": "© Mojaloop Foundation",
+      "sha256": "d4b2e7807849e60e2d4e3149beb3fdb8850dd64a040566991b856f0f25729028",
+      "note": "mojaloop/documentation at commit cfa8f5187f7a27eaa406c564a4b129e3d3253cae, path docs/technical/reference-architecture/boundedContexts/quotingAgreement/index.md."
+    },
+    {
+      "id": "mojaloop-settlement-basic-concepts",
+      "title": "Mojaloop Settlement Basic Concepts",
+      "filename": "mojaloop/settlement-basic-concepts.md",
+      "kind": "md",
+      "sourceUrl": "https://raw.githubusercontent.com/mojaloop/documentation/cfa8f5187f7a27eaa406c564a4b129e3d3253cae/docs/adoption/HubOperations/Settlement/settlement-basic-concepts.md",
+      "licence": "Apache-2.0",
+      "attribution": "© Mojaloop Foundation",
+      "sha256": "21e0023c998b7de90089843768eb6f355e5673ac6232cf2659520c436ae95e0f",
+      "note": "mojaloop/documentation at commit cfa8f5187f7a27eaa406c564a4b129e3d3253cae, path docs/adoption/HubOperations/Settlement/settlement-basic-concepts.md."
+    }
+  ],
+  "licenceFiles": [
+    {
+      "filename": "mojaloop/LICENSE.md",
+      "sourceUrl": "https://raw.githubusercontent.com/mojaloop/documentation/cfa8f5187f7a27eaa406c564a4b129e3d3253cae/LICENSE.md",
+      "sha256": "965ae78f17ab84d17fa3a5ceac38867368e3300ee273bef1fb585b4ef2a72c75"
+    }
+  ]
+}

@@ -33,7 +33,7 @@ Until the first promotion in M5, `master` holds only the chain. The first cut li
   - `lib/agent/{loop,tools,prompt,sentences,citations}.ts`
 - **Data:**
   - `db/migrations/0001_init.sql`
-  - `corpus/manifest.json`, `corpus/files/*` (committed), plus the Mojaloop `LICENSE` and `NOTICE`
+  - `corpus/manifest.json`, `corpus/files/*` (committed), plus the Mojaloop `LICENSE.md` (the repository ships no NOTICE)
   - `evals/questions.json`
 - **Scripts:** `scripts/{migrate,corpus-fetch,ingest-corpus,eval}.ts`
 - **Pipelines:** `.github/workflows/{ci,evals,pipeline}.yml`, `.github/dependabot.yml`
