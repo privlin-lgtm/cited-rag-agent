@@ -41,5 +41,8 @@ export const listDocuments = async (db: Db, sessionId?: string): Promise<Documen
       : { id, filename, title: filename, kind, origin: collection === 'corpus' ? 'corpus' : 'upload', chunks, createdAt: created_at };
   });
 
+export const deleteExpiredUploads = async (db: Db, now: Date) =>
+  (await db.query("delete from documents where collection like 'upload:%' and created_at <= $1::timestamptz - interval '24 hours' returning id", [now.toISOString()])).length;
+
 export const deleteUpload = async (db: Db, sessionId: string, id: string) =>
   (await db.query('delete from documents where id = $1::uuid and collection = $2 returning id', [id, `upload:${sessionId}`])).length > 0;

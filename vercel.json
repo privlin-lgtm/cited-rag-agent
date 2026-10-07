@@ -1,4 +1,5 @@
 {
   "regions": ["fra1"],
-  "git": { "deploymentEnabled": { "master": false } }
+  "git": { "deploymentEnabled": { "master": false } },
+  "crons": [{ "path": "/api/cron/cleanup", "schedule": "0 * * * *" }]
 }

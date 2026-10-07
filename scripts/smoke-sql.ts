@@ -1,9 +1,14 @@
 import { pathToFileURL } from 'node:url';
 import { z } from 'zod';
+import { checkCitations, type SentResult } from '../lib/agent/citations';
+import { runTool } from '../lib/agent/tools';
 import { postgresDb, type Db } from '../lib/db';
+import { deleteExpiredUploads, deleteUpload, listDocuments } from '../lib/documents';
 import { fakeEmbedder, fakeVector } from '../lib/fake-embedder';
 import { ingestDocument } from '../lib/ingest';
+import { addCost, addEmbedTokens, assertBudget, assertEmbedBudget, deleteExpiredWindows, reserveQuestion, reserveUpload } from '../lib/limits';
 import { keywordSearch, semanticSearch } from '../lib/search';
+import { ingestUpload } from '../lib/upload';
 import { migrate } from './migrate';
 
 class Rollback extends Error {}
@@ -51,6 +56,41 @@ export const steps: SmokeStep[] = [
     step('search: keyword, scoped to the smoke document');
     const keyword = await keywordSearch(db, '"1005.33"', { k: 3, documentIds: [id] });
     if (!keyword.length) throw new Error('keyword search returned no hit');
+  },
+  async ({ db, step }) => {
+    step('limits: reserve question and upload, add cost and embedding tokens, check budgets, clear expired windows');
+    const future = new Date('2099-01-01T12:00:00Z');
+    await reserveQuestion(db, 'smoke-test', future);
+    await reserveUpload(db, 'smoke-test', future);
+    await addCost(db, 0.0001, future);
+    await addEmbedTokens(db, 10, future);
+    await assertBudget(db, 1, future);
+    await assertEmbedBudget(db, future);
+    if ((await deleteExpiredWindows(db, new Date('2099-01-03T00:00:00Z'))) < 1) throw new Error('expired windows were not cleared');
+  },
+  async ({ db, step }) => {
+    step('documents: upload, list, expire, delete');
+    const upload = await ingestUpload(db, fakeEmbedder, 'smoke-session', 'smoke-upload.md', bytes(sample));
+    if (!(await listDocuments(db, 'smoke-session')).some(({ id }) => id === upload.id)) throw new Error('upload is not listed');
+    if (!(await deleteUpload(db, 'smoke-session', upload.id))) throw new Error('upload was not deleted');
+    await ingestUpload(db, fakeEmbedder, 'smoke-session', 'smoke-upload.md', bytes(sample));
+    if ((await deleteExpiredUploads(db, new Date('2099-01-01T00:00:00Z'))) < 1) throw new Error('expired uploads were not deleted');
+  },
+  async ({ db, step }) => {
+    const [{ id }] = await db.query<{ id: string }>('select id::text as id from documents where collection = $1', [COLLECTION]);
+    const context = { db, embed: fakeEmbedder, scope: new Set([id]) };
+    step('agent: search tools');
+    const found = await runTool(context, 'search_documents', { query: 'cancel a remittance transfer', k: 3 });
+    await runTool(context, 'keyword_search', { terms: '"1005.33"', k: 3 });
+    step('agent: read_neighbours and list_documents');
+    const [chunk] = await db.query<{ id: string }>('select id::text as id from chunks where document_id = $1::uuid order by ord limit 1', [id]);
+    await runTool(context, 'read_neighbours', { chunk_id: chunk.id });
+    await runTool(context, 'list_documents', {});
+    step('agent: citation check');
+    const sent: SentResult[] = found.entries.map((entry, index) => ({ ...entry, index, round: 1 }));
+    const citation = { type: 'search_result_location' as const, search_result_index: 0, start_block_index: 0, end_block_index: 1, cited_text: '', source: '', title: null };
+    const { results } = await checkCitations(db, sent, context.scope, [citation], () => null);
+    if (!results[0].ok) throw new Error('citation check failed on a valid citation');
   },
 ];
 
