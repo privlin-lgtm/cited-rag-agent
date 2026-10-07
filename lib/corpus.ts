@@ -1,32 +1,9 @@
 import { readFile } from 'node:fs/promises';
-import { z } from 'zod';
+import { manifestSchema } from './manifest';
+
+export { manifestSchema, type Manifest, type ManifestDocument } from './manifest';
 
 export const corpusDir = new URL('../corpus/', import.meta.url);
-
-const sha256 = z.string().regex(/^[0-9a-f]{64}$/);
-const filename = z.string().regex(/^(?!.*\.\.)[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*$/);
-
-export const manifestSchema = z.object({
-  documents: z
-    .array(
-      z.object({
-        id: z.string().regex(/^[a-z0-9-]+$/),
-        title: z.string().min(1),
-        filename,
-        kind: z.enum(['pdf', 'md', 'txt']),
-        sourceUrl: z.url(),
-        licence: z.string().min(1),
-        attribution: z.string().min(1),
-        sha256,
-        note: z.string().min(1).optional(),
-      }),
-    )
-    .min(1),
-  licenceFiles: z.array(z.object({ filename, sourceUrl: z.url(), sha256 })),
-});
-
-export type Manifest = z.infer<typeof manifestSchema>;
-export type ManifestDocument = Manifest['documents'][number];
 
 export const loadManifest = async () =>
   manifestSchema.parse(JSON.parse(await readFile(new URL('manifest.json', corpusDir), 'utf8')));

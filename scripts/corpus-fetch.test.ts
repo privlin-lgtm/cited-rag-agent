@@ -1,5 +1,36 @@
 import { describe, expect, it } from 'vitest';
-import { ecfrXmlToText } from './corpus-fetch';
+import { loadManifest } from '../lib/corpus';
+import { ecfrXmlToText, sources } from './corpus-fetch';
+
+const fields = ({ id, title, filename, kind, licence, licenceUrl, attribution, note }: Awaited<ReturnType<typeof loadManifest>>['documents'][number]) => ({
+  id,
+  title,
+  filename,
+  kind,
+  licence,
+  licenceUrl,
+  attribution,
+  note,
+});
+
+describe('the committed manifest', () => {
+  it('has the same fields that corpus:fetch writes, apart from hashes and download URLs', async () => {
+    const { documents } = await loadManifest();
+    const date = /as of (\d{4}-\d{2}-\d{2})/.exec(documents.find(({ id }) => id === 'regulation-e-subpart-b')?.note ?? '')?.[1] ?? '';
+    expect(documents.map(fields)).toEqual(sources(date).map((source) => fields({ ...source, sourceUrl: 'https://example.test', sha256: '0'.repeat(64) })));
+  });
+
+  it('links every licence that is not public domain, and credits the CC BY-ND page to its authors', async () => {
+    const { documents } = await loadManifest();
+    for (const { id, licence, licenceUrl } of documents) expect(Boolean(licenceUrl), id).toBe(!licence.startsWith('Public domain'));
+    const patterns = documents.find(({ id }) => id === 'mojaloop-generic-transaction-patterns');
+    expect(patterns).toMatchObject({
+      licence: 'CC BY-ND 4.0',
+      licenceUrl: 'https://creativecommons.org/licenses/by-nd/4.0/',
+      attribution: 'Ericsson, Huawei, Mahindra-Comviva, Telepin, and the Bill & Melinda Gates Foundation',
+    });
+  });
+});
 
 const xml = `<?xml version="1.0"?>
 <DIV6 N="B" TYPE="SUBPART" hierarchy_metadata="{&amp;quot;path&amp;quot;:&amp;quot;/on/x&amp;quot;}">
