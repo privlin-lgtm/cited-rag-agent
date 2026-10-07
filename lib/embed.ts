@@ -21,6 +21,8 @@ export const createEmbedder = ({
   now = Date.now,
   maxBatchTokens = Infinity,
   minIntervalMs = 0,
+  maxRetries = MAX_RETRIES,
+  timeoutMs,
 }: {
   apiKey: string;
   fetchImpl?: typeof fetch;
@@ -28,6 +30,8 @@ export const createEmbedder = ({
   now?: () => number;
   maxBatchTokens?: number;
   minIntervalMs?: number;
+  maxRetries?: number;
+  timeoutMs?: number;
 }): Embedder => {
   let lastRequestAt = -Infinity;
 
@@ -55,10 +59,11 @@ export const createEmbedder = ({
       lastRequestAt = now();
       const res = await fetchImpl('https://api.voyageai.com/v1/embeddings', {
         method: 'POST',
+        signal: timeoutMs ? AbortSignal.timeout(timeoutMs) : undefined,
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ input, model: EMBEDDING_MODEL, input_type: inputType, truncation: false, output_dimension: EMBEDDING_DIMENSIONS }),
       });
-      if (res.status === 429 && attempt < MAX_RETRIES) {
+      if (res.status === 429 && attempt < maxRetries) {
         await res.body?.cancel();
         await sleep(Math.max(Math.min(2 ** attempt * 1000, MAX_BACKOFF_MS), (Number(res.headers.get('retry-after')) || 0) * 1000));
         continue;
