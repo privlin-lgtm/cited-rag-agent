@@ -18,13 +18,41 @@ export const createEmbedder = ({
   apiKey,
   fetchImpl = fetch,
   sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)),
+  now = Date.now,
+  maxBatchTokens = Infinity,
+  minIntervalMs = 0,
 }: {
   apiKey: string;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+  maxBatchTokens?: number;
+  minIntervalMs?: number;
 }): Embedder => {
+  let lastRequestAt = -Infinity;
+
+  const batches = (texts: string[]) => {
+    const out: string[][] = [];
+    let tokens = 0;
+    for (const text of texts) {
+      const cost = Math.ceil(text.length / 4);
+      const last = out[out.length - 1];
+      if (last && last.length < MAX_BATCH && tokens + cost <= maxBatchTokens) {
+        last.push(text);
+        tokens += cost;
+      } else {
+        out.push([text]);
+        tokens = cost;
+      }
+    }
+    return out;
+  };
+
   const post = async (input: string[], inputType: InputType) => {
     for (let attempt = 0; ; attempt++) {
+      const wait = lastRequestAt + minIntervalMs - now();
+      if (wait > 0) await sleep(wait);
+      lastRequestAt = now();
       const res = await fetchImpl('https://api.voyageai.com/v1/embeddings', {
         method: 'POST',
         headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
@@ -44,10 +72,10 @@ export const createEmbedder = ({
   return async (texts, inputType) => {
     const embeddings: number[][] = [];
     let tokens = 0;
-    for (let i = 0; i < texts.length; i += MAX_BATCH) {
-      const batch = await post(texts.slice(i, i + MAX_BATCH), inputType);
-      embeddings.push(...batch.embeddings);
-      tokens += batch.tokens;
+    for (const batch of batches(texts)) {
+      const result = await post(batch, inputType);
+      embeddings.push(...result.embeddings);
+      tokens += result.tokens;
     }
     return { embeddings, tokens };
   };

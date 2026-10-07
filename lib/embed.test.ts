@@ -39,6 +39,30 @@ describe('createEmbedder', () => {
     expect(result.embeddings[299]).toEqual(vector(299));
   });
 
+  it('starts a new request when a batch would pass maxBatchTokens, and sends an oversize text alone', async () => {
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => ok(JSON.parse(init?.body as string).input));
+    const texts = ['a'.repeat(400), 'b'.repeat(400), 'c'.repeat(400), 'd'.repeat(40)];
+    await createEmbedder({ apiKey: 'k', fetchImpl, maxBatchTokens: 250 })(texts, 'document');
+    expect(fetchImpl.mock.calls.map((call) => requestOf(call).input.length)).toEqual([2, 2]);
+    fetchImpl.mockClear();
+    await createEmbedder({ apiKey: 'k', fetchImpl, maxBatchTokens: 50 })(texts, 'document');
+    expect(fetchImpl.mock.calls.map((call) => requestOf(call).input.length)).toEqual([1, 1, 1, 1]);
+  });
+
+  it('keeps requests at least minIntervalMs apart', async () => {
+    let clock = 0;
+    const waits: number[] = [];
+    const sleep = async (ms: number) => {
+      waits.push(ms);
+      clock += ms;
+    };
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => ok(JSON.parse(init?.body as string).input));
+    const texts = ['a'.repeat(400), 'b'.repeat(400), 'c'.repeat(400)];
+    await createEmbedder({ apiKey: 'k', fetchImpl, sleep, now: () => clock, maxBatchTokens: 100, minIntervalMs: 20_000 })(texts, 'document');
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(waits).toEqual([20_000, 20_000]);
+  });
+
   it('puts embeddings back in input order', async () => {
     const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => ok(JSON.parse(init?.body as string).input, true));
     const result = await createEmbedder({ apiKey: 'k', fetchImpl })(['text 1', 'text 2', 'text 3'], 'document');
