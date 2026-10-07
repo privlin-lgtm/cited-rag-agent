@@ -1,5 +1,5 @@
 # Intent: cited-rag-agent — agentic RAG with checked citations
-Author: Paul Rivlin (drafted with Claude) · Source: idea · Status: draft
+Author: Paul Rivlin (drafted with Claude) · Source: idea · Status: accepted
 Started: 2026-10-07 · Lane: major (the MVP; new AI features)
 
 ## Problem
