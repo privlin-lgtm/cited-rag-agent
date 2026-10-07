@@ -8,7 +8,7 @@ Times are Israel time. The build runs in Claude Code on Paul's machine, from the
 |---|---|---|---|---|
 | M0 | Intent, spec, plan, plus the build session's review of the spec and plan (`review-2026-10-07.md`) and these revisions; gate commits on `flow/mvp` | `flow/mvp` → `master` (PR #9) | Wed 7 Oct 12:00–14:00 | **Accept the intent; approve the spec (with decisions D1–D6) and the plan; merge** |
 | M1 | Scaffold and guardrails (workflow Phase 3a): the `sandbox` branch; the Python code leaves the tree; Next.js app; one command each for lint, typecheck, test and build; the `Db` interface with both drivers; `0001_init.sql` and `scripts/migrate.ts`; `/api/health`; the agent files in the appendix; CI; Dependabot | `m1-scaffold` → `sandbox` | Wed 14:00–16:30 | **Manual approvals until the hooks are proven; review and merge by 17:30, then close Dependabot PRs #1–#8 (or let the M2 session do it)** |
-| S1 | Accounts and keys: Neon Sandbox project; Anthropic workspace (limit $30) and key; Voyage key (no card); Vercel project (region `fra1`, protection off, env vars); `.env.local` copied into the secrets archive | n/a | Wed 16:30–17:45, or 20:00 before M2 | **About 30 min, steps from the planning session** |
+| S1 | Accounts and keys: Neon Sandbox project; Anthropic workspace (limit $20) and key; Voyage key (no card); Vercel project (region `fra1`, protection off, env vars); `.env.local` copied into the secrets archive | n/a | Wed 16:30–17:45, or 20:00 before M2 | **About 30 min, steps from the planning session** |
 | M2 | The corpus pack committed with manifest and hashes; extractors, chunker, sentence splitter, Voyage client, versioned ingest; semantic and keyword search; the real corpus ingested into Sandbox | `m2-ingest` → `sandbox` | Wed 20:15–23:30, after class | **Start the session, approve its plan, merge** |
 | M3 | Agent loop (Fable designs it in plan mode, Sonnet builds it), NDJSON stream, citation check, three-column UI, example questions, limits and budgets, upload, cleanup cron, environment badge; deployed to the Sandbox preview | `m3-agent` → `sandbox` | Thu 8 Oct 08:30–12:30 | **Start the session, review, merge** |
 | ★ | **FIRST CUT:** M1–M3 on the Sandbox preview URL with the real corpus | | **Thu 8 Oct ~13:00** | **Walk-through 13:00–16:00 with same-day fixes; apply Thu evening** |
@@ -18,7 +18,7 @@ Times are Israel time. The build runs in Claude Code on Paul's machine, from the
 
 The full set is due Wed 14 Oct, with Thu 15 as buffer. Sunday 11 is TriviaFoundry's launch, so nothing is planned here that day.
 
-**The tight spot is Wednesday evening.** M2 needs about three hours at the machine after class. If that slips, the first cut moves to Thursday evening, and the planning session tells Paul by Wednesday 21:00 so he can decide whether to apply anyway.
+**Wednesday 7 October had no class,** so S1 was done by 15:45 and M2 started straight after; M3 can follow the same evening. The first cut is due on Thursday 8 October in the morning, leaving the afternoon for Paul's walk-through and the application.
 
 Until the first promotion in M5, `master` holds only the chain. The first cut lives on `sandbox`, the integration branch. Vercel builds `master` as production when the project is imported in S1; that build fails harmlessly, because `master` has no app yet. The Dependabot PRs for the Python code (#1–#8) close when M1 merges, the same day the code leaves (a.3).
 
@@ -38,7 +38,7 @@ Until the first promotion in M5, `master` holds only the chain. The first cut li
 - **Scripts:** `scripts/{migrate,corpus-fetch,ingest-corpus,eval}.ts`
 - **Pipelines:** `.github/workflows/{ci,evals,pipeline}.yml`, `.github/dependabot.yml`
 - **Agent setup:** `AGENTS.md`, `CLAUDE.md`, `REVIEW.md`, `.claude/settings.json`, `.claude/hooks/{no-placeholders,production-gate}.mjs`, `.claude/agents/{verifier,architect}.md`
-- **Config and docs:** `vercel.json`, `.env.example`, `.gitattributes`, `.gitignore`, `.worktreeinclude`, `README.md`
+- **Config and docs:** `package.json`, `package-lock.json`, `tsconfig.json`, `eslint.config.mjs`, `vitest.config.ts`, `postcss.config.mjs`, `app/globals.css`, `vercel.json`, `.env.example`, `.gitattributes`, `.gitignore`, `.worktreeinclude`, `README.md`. Scripts run through `tsx` with `--env-file-if-exists=.env.local`.
 
 ## Schema delta
 From nothing to the spec's four tables:
@@ -64,7 +64,7 @@ From nothing to the spec's four tables:
 - **M1:**
   - `npm run lint`, `npm run typecheck`, `npm test` and `npm run build` pass locally and in CI.
   - Tests show `0001_init.sql` applied through `scripts/migrate.ts` on PGlite via `Db`, a cosine query on a 1024-dim vector returning the nearest row, and env validation rejecting an `ANTHROPIC_MODEL` missing from `lib/pricing.ts`.
-  - Each hook has been triggered once on purpose and blocked: a `TODO` comment in code, and `git push origin HEAD:sandbox`.
+  - Each hook has been triggered once on purpose and blocked: a `TODO` comment in code, and `git push --dry-run origin HEAD:sandbox` (a dry run, so nothing moves even if the hook failed).
 - **M2:**
   - Tests show:
     - every committed corpus file matches its manifest hash;
@@ -95,13 +95,13 @@ From nothing to the spec's four tables:
   - The 5-minute demo has been rehearsed once end to end.
 
 ## Risks
-1. **Wednesday evening slips:** the first cut moves to Thursday evening (see above).
+1. **M3 slips past Thursday morning:** the walk-through and the application move to Thursday afternoon; the planning session flags it as soon as it's clear.
 2. **Voyage rate limits:** `voyage-4` allows 2,000 requests and 8M tokens a minute, at up to 1,000 texts or 320K tokens per request. The 0.4M-token corpus is a handful of requests and takes under a minute. Keep exponential backoff on 429s; no card is needed.
 3. **A corpus source refuses scripted downloads:** Paul downloads it once in a browser into `corpus/files/`, and the hash goes into the manifest.
 4. **Multi-call agent latency on Vercel:** `maxDuration` of 120 s (Pro allows up to 800), streaming so progress is visible, and the round cap.
 5. **PDF extraction on the CFPB guide's tables:** inspect the extracted text in M2 and adjust the packing and the splitter's table-row rule.
 6. **Claude answers without citing:** the system prompt requires citations, the answer header shows the checked count, and the first-cut walk-through tests it.
-7. **Next.js 16.4.0 is one day old:** pinned exactly, with 16.3.x as the fallback.
+7. **Next.js 16.4.0 is one day old:** pinned exactly, with 16.3.x as the fallback. TypeScript stays on `~5.9.3` (patch updates only), because npm's `latest` is the 7.x Go compiler; Dependabot ignores TypeScript majors.
 8. **Neon cold start after 5 idle minutes:** about a second on the first query. Acceptable for a demo.
 9. **Windows specifics:** hooks run as Node scripts under Git Bash with `CLAUDE_CODE_USE_POWERSHELL_TOOL=0`, and `.gitattributes` pins LF.
 
@@ -153,7 +153,10 @@ From nothing to the spec's four tables:
   - installing TypeScript 7 (pin `~5.9.3`);
   - using `next lint`;
   - bumping `@electric-sql/pglite` without `@electric-sql/pglite-pgvector`;
-  - connecting migrations through a pooled transaction endpoint.
+  - connecting migrations through a pooled transaction endpoint;
+  - retrying or working around a destructive command blocked by Paul's user-level GateGuard hook (`git rm -r`, `rm -rf`, `Remove-Item -Recurse`): give Paul the exact command, folder and window, and wait.
+
+`AGENTS.md` also keeps the `nextjs-agent-rules` block that `next dev` writes and re-adds: a pointer to the version-matched Next.js docs in `node_modules/next/dist/docs/`.
 
 **`CLAUDE.md`:** `@AGENTS.md`, followed by the constraint block below, verbatim.
 
@@ -220,12 +223,13 @@ The message tells the agent to push a named branch and open a PR.
 
 **Also in M1:**
 - **`.gitattributes`:** `* text=auto eol=lf`.
-- **`.gitignore`:** `node_modules/`, `.next/`, `.env`, `.env*.local`, `.claude/worktrees/`, `.claude/settings.local.json`, `coverage/`.
+- **`.gitignore`:** `node_modules/`, `.next/`, `.env`, `.env*.local`, `.claude/worktrees/`, `.claude/settings.local.json`, `coverage/`, `next-env.d.ts`, `*.tsbuildinfo` (generated by `next build` and incremental `tsc`).
 - **`.worktreeinclude`:** `.env.local`.
-- **`.env.example`:** key names only — `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `VOYAGE_API_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `DAILY_ANTHROPIC_BUDGET_USD`, `IP_HASH_SECRET`, `CRON_SECRET`, `APP_ENV`.
+- **`.env.example`:** key names, with safe defaults `ANTHROPIC_MODEL=claude-sonnet-5-5`, `DAILY_ANTHROPIC_BUDGET_USD=1.00` and `APP_ENV=local`; every other value blank.
+- **`lib/env.ts`:** validates eight runtime variables (`DATABASE_URL`, `VOYAGE_API_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `DAILY_ANTHROPIC_BUDGET_USD`, `IP_HASH_SECRET`, `CRON_SECRET`, `APP_ENV`). `MIGRATION_DATABASE_URL` is read only by `scripts/migrate.ts`, never by the app. A blank value fails validation; blank is not unset.
 - **`vercel.json`:** `regions: ["fra1"]` and `git.deploymentEnabled.master: false`. The second takes effect only once M5 promotes it to `master`, so production deploys come from the pipeline from the start.
-- **`ci.yml`:** on every PR and on pushes to `sandbox`, `qa` and `master`, runs `npm ci`, lint, typecheck, test and build.
-- **`dependabot.yml`:** weekly npm updates, with the two PGlite packages in one group, and weekly GitHub Actions updates.
+- **`ci.yml`:** on every PR and on pushes to `sandbox`, `qa` and `master`, runs `npm ci`, lint, typecheck, test and build. It runs on Node 24, which Vercel uses too.
+- **`dependabot.yml`:** weekly npm updates, with the two PGlite packages in one group and TypeScript major versions ignored, and weekly GitHub Actions updates.
 - **Home page in M1:** the app name, a one-line description, the environment badge, and links to the intent, spec and plan on GitHub.
 
 ## CLAUDE.md constraint block (verbatim, from the planning brief)
