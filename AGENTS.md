@@ -10,7 +10,9 @@ Run from the repo root.
 - `npm test`: Vitest. Healthy: `Test Files  N passed (N)` and `Tests  N passed (N)`.
 - `npm run build`: `next build`. Healthy: `✓ Compiled successfully`, then the route table.
 - `npm run migrate`: applies pending `db/migrations/*.sql` to Sandbox through `.env.local`. Healthy: `applied 0001_init.sql` or `nothing to apply`.
-- `npm run corpus:fetch`, `npm run ingest:corpus`, `npm run eval`: arrive in M2 and M4. They do not exist yet.
+- `npm run corpus:fetch`: downloads the corpus into `corpus/files/` and rewrites `corpus/manifest.json`. Needs the network, not `.env.local`. Healthy: one line per document, then `9 documents, 3559380 bytes (3.39 MB)`. A 403 or an HTML answer fails with the URL.
+- `npm run ingest:corpus`: ingests the manifest into the database in `.env.local` (Sandbox). Without a card on the Voyage account the limits are 3 requests and 10K tokens a minute, so a first run takes about 25 minutes. Healthy: one line per document, then `9 ingested, 0 skipped`, and `0 ingested, 9 skipped` on a rerun.
+- `npm run eval`: arrives in M4. It does not exist yet.
 
 ## Before reporting done
 Run lint, typecheck, test and build, and paste the output. Fix the code, not the test.

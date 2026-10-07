@@ -1,6 +1,37 @@
+import postgres from 'postgres';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { migrate } from '../scripts/migrate';
-import { pgliteDb, type Db } from './db';
+import { pgliteDb, withoutChannelBinding, type Db } from './db';
+
+const neonUrl = 'postgresql://user:p%40ss@ep-cool-123.eu-central-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+
+describe('withoutChannelBinding', () => {
+  it('removes channel_binding and keeps the rest of the URL', () => {
+    expect(withoutChannelBinding(neonUrl)).toBe(
+      'postgresql://user:p%40ss@ep-cool-123.eu-central-1.aws.neon.tech/neondb?sslmode=require',
+    );
+    expect(withoutChannelBinding('postgresql://u:p@host/db?channel_binding=require')).toBe('postgresql://u:p@host/db');
+  });
+
+  it('leaves a URL without channel_binding unchanged', () => {
+    expect(withoutChannelBinding('postgresql://u:p@host:5432/db?sslmode=require')).toBe(
+      'postgresql://u:p@host:5432/db?sslmode=require',
+    );
+  });
+
+  it('keeps channel_binding out of the startup parameters postgres.js sends', () => {
+    expect(postgres(neonUrl).options.connection).toHaveProperty('channel_binding', 'require');
+    expect(postgres(withoutChannelBinding(neonUrl)).options.connection).not.toHaveProperty('channel_binding');
+  });
+});
+
+describe('postgres.js JSON parameters', () => {
+  it('serialises a JSON string once through ::text::jsonb, where a direct jsonb parameter would encode it twice', () => {
+    const { serializers } = postgres(neonUrl).options;
+    expect(serializers[3802]('[1]')).toBe('"[1]"');
+    expect(serializers[25]('[1]')).toBe('[1]');
+  });
+});
 
 let db: Db;
 

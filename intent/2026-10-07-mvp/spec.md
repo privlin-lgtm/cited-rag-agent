@@ -2,27 +2,27 @@
 Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); references such as (b.3) point to its items. Decisions D1–D6 at the end are confirmed by approving this spec.
 
 ## Stack
-- **App:** Next.js 16.4.0 (App Router, Route Handlers on the Node runtime), React 19.3.0, TypeScript `~5.9.3`, Tailwind CSS 4 with a few shadcn/ui components. Every version is pinned exactly and the lockfile is committed. Lint runs through the ESLint CLI, since `next lint` is gone in 16. Hosted on Vercel (Paul's Pro account), with functions in `fra1`.
-- **Database:** Postgres 17 with pgvector, one Neon Free project per environment in `aws-eu-central-1` (D1). The app connects over the pooled endpoint with `prepare: false`; migrations run over the direct endpoint, which is reachable over IPv4.
+- **App:** Next.js 16.4.0 (App Router, Route Handlers on the Node runtime), React 19.3.0, TypeScript `~5.9.3`, Tailwind CSS 4 with a few shadcn/ui components. Every version is pinned exactly except TypeScript (`~5.9.3`, patch updates only), and the lockfile is committed. Lint runs through the ESLint CLI, since `next lint` is gone in 16. Hosted on Vercel (Paul's Pro account), with functions in `fra1`.
+- **Database:** Postgres with pgvector, one Neon Free project per environment in `aws-eu-central-1` (D1). The app connects over the pooled endpoint with `prepare: false`; migrations run over the direct endpoint, which is reachable over IPv4. Neon runs Postgres 18; tests run on PGlite's Postgres 17, and the schema uses nothing that differs between them. `MIGRATION_DATABASE_URL` is read only by `scripts/migrate.ts`. `lib/db.ts` drops the `channel_binding` URL parameter, which postgres.js doesn't support; `sslmode=require` keeps TLS on.
   - **If D1 goes to Supabase instead:** the app uses the transaction pooler (port 6543, `prepare: false`), and migrations use the session pooler (port 5432, user `postgres.<ref>`, host copied from the dashboard). Never the direct host, which is IPv6-only and unreachable from GitHub runners and Vercel (c).
 - **Storage interface** (a.1), the prototype's `VectorStore` idea at the right size:
   - `lib/db.ts` exports `type Db = { query<T>(text: string, params?: unknown[]): Promise<T[]>; transaction<T>(fn: (tx: Db) => Promise<T>): Promise<T> }`.
   - It has two drivers: `postgres` (porsager) for real databases, and PGlite (`@electric-sql/pglite` 0.5.8 with `@electric-sql/pglite-pgvector` 0.0.9, pinned exactly and grouped in Dependabot) for tests.
   - Every query is plain SQL with `$n` parameters, so both drivers run the same queries and the same migrations.
 - **Embeddings:** Voyage `voyage-4`, 1024 dimensions, `input_type` set to `document` or `query`, `truncation: false`. Batches hold at most 128 texts, well inside the API's 1,000-text and 320K-token request limits.
-- **LLM:** Anthropic Messages API through `@anthropic-ai/sdk` 0.131.0, model `claude-sonnet-5-5`, overridable by `ANTHROPIC_MODEL`. That value must be a key in `lib/pricing.ts`, or startup fails (b.14).
+- **LLM:** Anthropic Messages API through `@anthropic-ai/sdk` 0.131.0, model `claude-sonnet-5-5`, overridable by `ANTHROPIC_MODEL`. That value must be a key in `lib/pricing.ts`, or the first request that reads the environment fails (b.14). Validation is lazy: a bad value surfaces on the first page or `/api/health` request, never silently.
 - **Tests:** Vitest. Database tests run on PGlite through the `Db` interface, so CI needs no database service for unit tests.
 - **Why this stack:** the posting names Node.js and React. Next.js keeps the API and UI in one deployable; pgvector keeps vectors beside the relational data; plain SQL keeps every retrieval query readable in an interview.
 
 ## Features
 1. **Demo corpus.** The cross-border payments pack, committed under `corpus/files/` (D4).
-   - **The manifest:** `corpus/manifest.json` records each file's title, filename, kind, source URL, licence, attribution line and SHA-256.
+   - **The manifest:** `corpus/manifest.json` records each file's id, title, filename, kind, source URL, licence, attribution line and SHA-256, plus an optional `note` for a fact a reader needs, such as the eCFR date or the Mojaloop commit. A licence file that ships with a source (Mojaloop's `LICENSE.md`) is listed with its hash under `licenceFiles`, because it is not a document to ingest.
    - **Contents:**
      - the CFPB Remittance Transfers Small Entity Compliance Guide, version 5.0 (PDF);
      - the CFPB Remittance Transfer Rule Examination Procedures (PDF);
      - 12 CFR part 1005 subpart B (Regulation E remittance transfers), as plain text built from the eCFR (txt);
-     - Directive (EU) 2015/2366 (PSD2), the Official Journal PDF from EUR-Lex (PDF);
-     - four or five Mojaloop documentation pages on transfers, quotes, party lookup and settlement, from `mojaloop/documentation` at a pinned commit (md). Mojaloop's `LICENSE` and `NOTICE` sit beside them.
+     - Directive (EU) 2015/2366 (PSD2), the Official Journal PDF (PDF). It comes from the Publications Office's Cellar, because EUR-Lex answers scripted requests with a challenge; it is the same text as EUR-Lex CELEX:32015L2366;
+     - five Mojaloop documentation pages on transfers, quotes, party lookup and settlement, from `mojaloop/documentation` at a pinned commit (md). The repository ships `LICENSE.md` and no NOTICE, so `LICENSE.md` sits beside them. One page, the FSPIOP generic transaction patterns, states CC BY-ND 4.0 in its own front matter, and the manifest says so.
    - **Refreshing:** `npm run corpus:fetch` downloads every file from its source URL and rewrites the hashes. It builds the pack once and refreshes it later; CI never calls it. A unit test checks every committed file against its manifest hash.
    - **In the UI:** each document's licence and source are shown.
 2. **Upload.**
@@ -134,7 +134,7 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
 - `POST /api/upload`: multipart, one file → `{ document }` once ingested, or a 4xx with the reason.
 - `GET /api/documents`: the corpus plus this session's uploads.
 - `DELETE /api/documents/:id`: the session's own uploads only.
-- `GET /api/health`: `{ env, database, lastMigration }`, which shows per environment that each has its own database.
+- `GET /api/health`: `{ env, database, lastMigration }`, where `database` is the first 12 hex characters of the SHA-256 of `DATABASE_URL`'s host name, so environments are told apart without publishing the host.
 - `GET /api/cron/cleanup`: a Vercel Cron job, run hourly, that deletes uploads older than 24 h and expired limit windows. It is protected by `CRON_SECRET`.
 
 ## Schema
@@ -196,18 +196,18 @@ create table usage_windows (
   - about 15 to 25K input tokens across 3 to 4 calls, plus about 800 output tokens, which comes to roughly $0.04 to $0.06;
   - prompt caching on the growing prefix should take that to about $0.02 to $0.03;
   - `between_tools` keeps thinking tokens to the short progress updates.
-- **Ceilings:** the app's daily budget of $1.00 is about 30 to 50 questions a day. The Anthropic workspace's monthly limit of $30 is the hard stop (D2).
-- **Embeddings:** the corpus is about 0.4M tokens once, at $0 inside Voyage's 200M free tokens. Questions cost a few hundred tokens each.
+- **Ceilings:** the app's daily budget of $1.00 is about 30 to 50 questions a day. The Anthropic workspace's monthly limit of $20 is the hard stop (D2).
+- **Embeddings:** the corpus is about 0.19M Voyage tokens once (185,476 measured in M2), at $0 inside Voyage's 200M free tokens. Questions cost a few hundred tokens each.
 
 ## Out of scope
 OCR; MongoDB; accounts and logins; storing agent runs or chat history; re-ranking models; streaming partial citations; i18n; native mobile.
 
 ## Concerns
-1. **Public demo on paid keys.** Covered by the limits in feature 10 and the workspace limit. Voyage has no spend-limit setting: the key stays on the free tier with no card, a $0 ceiling, against 200M free tokens.
+1. **Public demo on paid keys.** Covered by the limits in feature 10 and the workspace limit. Voyage has budget alerts, not hard caps. The project `cited-rag-agent` has a $5 monthly alert (email only) and there is no card on the account, so spend stays at $0 against 200M free tokens.
 2. **Licences.**
    - CFPB and eCFR texts are US federal works in the public domain (17 U.S.C. §105).
    - PSD2 is reused from EUR-Lex with the source acknowledged. The exact acknowledgement wording is confirmed against EUR-Lex's legal notice and recorded in the manifest and README before the file is committed.
-   - Mojaloop's docs are Apache-2.0, so its `LICENSE` and `NOTICE` go beside the files.
+   - Mojaloop's docs are Apache-2.0 apart from the one page noted under feature 1. The repository ships `LICENSE.md` and no NOTICE, so `LICENSE.md` goes beside the files.
 3. **Corpus sources that refuse scripted downloads.** Paul downloads that file once in a browser. The file is committed, so CI never depends on the source.
 4. **Vercel request limit.** Bodies are capped at 4.5 MB, hence the 4 MB upload limit.
 5. **Paul's constraint block** applies to app code and hook scripts alike.
@@ -217,7 +217,7 @@ OCR; MongoDB; accounts and logins; storing agent runs or chat history; re-rankin
 
 ## Decisions confirmed by approving this spec
 - **D1 Hosting:** Neon Free, one project per environment, $0 a month. The alternative was Supabase: Sandbox on the free slot, plus QA and production on Pro in a separate organisation at about $35 a month. Supabase's free projects also pause after a week without traffic.
-- **D2 Anthropic spend:** the workspace monthly limit is $30, and the app's daily budget is $1.00 (`DAILY_ANTHROPIC_BUDGET_USD`), raised through that env var on interview days.
+- **D2 Anthropic spend:** the workspace monthly limit is $20, set at setup to leave room in the organisation's $50 limit for Paul's other projects, and the app's daily budget is $1.00 (`DAILY_ANTHROPIC_BUDGET_USD`), raised through that env var on interview days.
 - **D3 Production release:** the pipeline migrates and then deploys, after Paul approves in GitHub. Vercel's automatic deploys from `master` are off.
 - **D4 Corpus files:** committed to the repo (about 5 MB), with their licences beside them.
 - **D5 Preview protection:** Vercel Deployment Protection is off for this project.
