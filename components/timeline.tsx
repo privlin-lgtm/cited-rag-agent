@@ -29,7 +29,11 @@ export const Timeline = ({ steps, running }: { steps: StepEvent[]; running: bool
             {label(step) && <span className="min-w-0 break-words text-zinc-700 dark:text-zinc-300">{label(step)}</span>}
           </div>
           {step.reason && <p className="mt-1 italic text-zinc-600 dark:text-zinc-400">{step.reason}</p>}
-          {step.fallback && <p className="mt-1 text-amber-700 dark:text-amber-400">keyword fallback (embeddings unavailable)</p>}
+          {step.fallback && (
+            <p className="mt-1 text-amber-700 dark:text-amber-400" title={step.fallbackReason?.slice(0, 200)}>
+              keyword fallback (embeddings unavailable)
+            </p>
+          )}
           {step.error && <p className="mt-1 text-red-700 dark:text-red-400">{step.error}</p>}
           {step.hits.length > 0 && (
             <ul className="mt-2 space-y-0.5 text-xs text-zinc-600 dark:text-zinc-400">

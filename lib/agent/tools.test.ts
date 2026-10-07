@@ -62,6 +62,7 @@ describe('search tools', () => {
     };
     const run = await runTool(context(fixture.all, failing), 'search_documents', { query: 'how long to cancel a remittance transfer?' });
     expect(run.fallback).toBe('keyword');
+    expect(run.fallbackReason).toBe('Voyage is down');
     expect(run.embedTokens).toBeUndefined();
     expect(run.hits.length).toBeGreaterThan(0);
     expect(run.hits[0].file).toBe('cancel.md');

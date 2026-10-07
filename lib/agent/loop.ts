@@ -39,6 +39,7 @@ export type StepEvent = {
   input: unknown;
   hits: { file: string; locator: string; score: number | null }[];
   fallback?: 'keyword';
+  fallbackReason?: string;
   error?: string;
 };
 
@@ -146,7 +147,7 @@ export const runAgent = async (deps: AgentDeps, question: string, emit: (event: 
     const toolResults: ToolResultBlockParam[] = uses.map((use, i) => {
       const run = runs[i];
       for (const entry of run.entries) sent.push({ ...entry, index: sent.length, round: round + 1 });
-      emit({ type: 'step', round: round + 1, reason: texts[i], tool: use.name, input: run.input, hits: run.hits, fallback: run.fallback, error: run.error });
+      emit({ type: 'step', round: round + 1, reason: texts[i], tool: use.name, input: run.input, hits: run.hits, fallback: run.fallback, fallbackReason: run.fallbackReason, error: run.error });
       if (run.embedTokens) emit({ type: 'usage', embedTokens: run.embedTokens });
       return {
         type: 'tool_result',

@@ -1,5 +1,5 @@
 import type { Message, StopReason } from '@anthropic-ai/sdk/resources/messages';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModelCall, ModelParams } from './agent/loop';
 import { setup, type Fixture } from './agent/test-setup';
 import { handleAsk, handleCleanup, handleDelete, handleDocuments, handleUpload, type ApiDeps } from './api';
@@ -157,12 +157,14 @@ describe('POST /api/ask', () => {
     expect(listing).not.toContain(other.id);
   });
 
-  it('uses the keyword fallback for every search once the embedding budget is spent', async () => {
+  it('uses the keyword fallback for every search once the embedding budget is spent, and logs why', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await addEmbedTokens(fixture.db, EMBED_TOKENS_PER_DAY, NOW);
     script = (calls) =>
       calls.length === 1 ? reply([toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer' })], 'tool_use') : reply([text('Done.')], 'end_turn');
     const lines = await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));
-    expect(lines.find(({ type }) => type === 'step')).toMatchObject({ fallback: 'keyword' });
+    expect(lines.find(({ type }) => type === 'step')).toMatchObject({ fallback: 'keyword', fallbackReason: expect.stringContaining('Embedding budget reached') });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('search_documents fell back to keyword search: Embedding budget reached'));
   });
 });
 

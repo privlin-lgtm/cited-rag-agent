@@ -100,7 +100,11 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
                 sourceUrlOf: (documentId) => sourceUrls.get(documentId) ?? null,
               },
               question,
-              (event) => (event.type === 'usage' ? record(event) : write(event)),
+              (event) => {
+                if (event.type === 'usage') return record(event);
+                if (event.type === 'step' && event.fallback) console.warn(`${event.tool} fell back to keyword search: ${event.fallbackReason}`);
+                write(event);
+              },
             );
             await recording;
           } catch (error) {

@@ -13,6 +13,7 @@ Run from the repo root.
 - `npm run smoke:sql`: runs every statement the app and its scripts issue, through postgres.js on Sandbox, in one transaction that is always rolled back. Run it after any change to SQL, because PGlite hides driver differences. Healthy: one line per statement with its row count, then `rolled back; nothing left behind`.
 - `npm run corpus:fetch`: downloads the corpus into `corpus/files/` and rewrites `corpus/manifest.json`. Needs the network, not `.env.local`. Healthy: one line per document, then `9 documents, 3559380 bytes (3.39 MB)`. A 403 or an HTML answer fails with the URL.
 - `npm run ingest:corpus`: ingests the manifest into the database in `.env.local` (Sandbox). A first run of the nine documents takes about a minute, and a changed `INGEST_VERSION` re-ingests all of them. Healthy: one line per document, then `9 ingested, 0 skipped`, and `0 ingested, 9 skipped` on a rerun.
+- `npx tsx --env-file-if-exists=.env.local scripts/retrieval-check.ts`: embeds three questions with Voyage and prints the top 3 semantic and keyword hits for each, then two table chunks from the CFPB guide. Healthy: `query embeddings used N Voyage tokens`, then three blocks of hits.
 - `npm run eval`: arrives in M4. It does not exist yet.
 
 ## Before reporting done

@@ -70,12 +70,9 @@ export const DocumentsPanel = ({
       <h3 className="mb-2 mt-5 text-xs font-semibold uppercase tracking-wide text-zinc-500">Your uploads</h3>
       {uploads.length > 0 && <ul className="mb-3 space-y-2">{uploads.map(item)}</ul>}
       <label className="block">
-        <span className="inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-zinc-300 px-3 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800">
-          {uploading ? 'Uploading…' : 'Upload a file'}
-        </span>
         <input
           type="file"
-          className="sr-only"
+          className="peer sr-only"
           accept=".md,.pdf,.txt"
           disabled={uploading}
           onChange={(event) => {
@@ -84,6 +81,9 @@ export const DocumentsPanel = ({
             if (file) onUpload(file);
           }}
         />
+        <span className="inline-flex h-8 cursor-pointer items-center justify-center rounded-md border border-zinc-300 px-3 text-xs font-medium hover:bg-zinc-100 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-indigo-500 dark:border-zinc-700 dark:hover:bg-zinc-800">
+          {uploading ? 'Uploading…' : 'Upload a file'}
+        </span>
       </label>
       <p className="mt-2 text-xs text-zinc-500">md, pdf or txt, up to 4 MB and 40 pages. Only this browser session can see it, and it is deleted after 24 hours.</p>
       {uploadError && <p className="mt-2 text-xs text-red-700 dark:text-red-400">{uploadError}</p>}

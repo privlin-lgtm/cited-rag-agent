@@ -53,6 +53,7 @@ export type ToolRun = {
   input: unknown;
   isError: boolean;
   fallback?: 'keyword';
+  fallbackReason?: string;
   error?: string;
   embedTokens?: number;
 };
@@ -97,13 +98,17 @@ export const runTool = async ({ db, embed, scope }: ToolContext, name: string, r
     const input = { ...args, document_ids: args.document_ids?.length ? ids : undefined };
     if (args.document_ids?.length && !ids.length) return failed(input, NOT_IN_SCOPE);
     if (name === 'keyword_search') return asRun(input, await keywordSearch(db, args.terms ?? '', { k: args.k, documentIds: ids }));
+    let fallbackReason = '';
     const embedded = await embed([args.query ?? ''], 'query').then(
       (result) => result,
-      () => null,
+      (error: unknown) => {
+        fallbackReason = error instanceof Error ? error.message : String(error);
+        return null;
+      },
     );
     return embedded
       ? asRun(input, await semanticSearch(db, embedded.embeddings[0], { k: args.k, documentIds: ids }), { embedTokens: embedded.tokens })
-      : asRun(input, await keywordSearch(db, orQuery(args.query ?? ''), { k: args.k, documentIds: ids }), { fallback: 'keyword' });
+      : asRun(input, await keywordSearch(db, orQuery(args.query ?? ''), { k: args.k, documentIds: ids }), { fallback: 'keyword', fallbackReason });
   }
 
   if (name === 'read_neighbours') {

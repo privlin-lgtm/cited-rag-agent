@@ -216,6 +216,7 @@ describe('runAgent', () => {
     );
     const [step] = ofType(await run(model, { embed: failing }), 'step');
     expect(step.fallback).toBe('keyword');
+    expect(step.fallbackReason).toBe('Voyage is down');
     expect(step.hits.length).toBeGreaterThan(0);
   });
 
