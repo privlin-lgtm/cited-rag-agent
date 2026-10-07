@@ -19,15 +19,17 @@ describe('withoutChannelBinding', () => {
     );
   });
 
+  it('keeps channel_binding out of the startup parameters postgres.js sends', () => {
+    expect(postgres(neonUrl).options.connection).toHaveProperty('channel_binding', 'require');
+    expect(postgres(withoutChannelBinding(neonUrl)).options.connection).not.toHaveProperty('channel_binding');
+  });
+});
+
+describe('postgres.js JSON parameters', () => {
   it('serialises a JSON string once through ::text::jsonb, where a direct jsonb parameter would encode it twice', () => {
     const { serializers } = postgres(neonUrl).options;
     expect(serializers[3802]('[1]')).toBe('"[1]"');
     expect(serializers[25]('[1]')).toBe('[1]');
-  });
-
-  it('keeps channel_binding out of the startup parameters postgres.js sends', () => {
-    expect(postgres(neonUrl).options.connection).toHaveProperty('channel_binding', 'require');
-    expect(postgres(withoutChannelBinding(neonUrl)).options.connection).not.toHaveProperty('channel_binding');
   });
 });
 

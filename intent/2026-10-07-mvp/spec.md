@@ -197,7 +197,7 @@ create table usage_windows (
   - prompt caching on the growing prefix should take that to about $0.02 to $0.03;
   - `between_tools` keeps thinking tokens to the short progress updates.
 - **Ceilings:** the app's daily budget of $1.00 is about 30 to 50 questions a day. The Anthropic workspace's monthly limit of $20 is the hard stop (D2).
-- **Embeddings:** the corpus is about 0.4M tokens once, at $0 inside Voyage's 200M free tokens. Questions cost a few hundred tokens each.
+- **Embeddings:** the corpus is about 0.19M Voyage tokens once (185,476 measured in M2), at $0 inside Voyage's 200M free tokens. Questions cost a few hundred tokens each.
 
 ## Out of scope
 OCR; MongoDB; accounts and logins; storing agent runs or chat history; re-ranking models; streaming partial citations; i18n; native mobile.
