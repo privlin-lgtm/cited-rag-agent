@@ -27,7 +27,14 @@ const fromPglite = (pg: PGlite | Transaction, inTx = false): Db => {
   return db;
 };
 
-export const postgresDb = (url: string): Db => fromPostgres(postgres(url, { prepare: false }));
+export const withoutChannelBinding = (url: string) => {
+  const parsed = new URL(url);
+  parsed.searchParams.delete('channel_binding');
+  return parsed.toString();
+};
+
+export const postgresDb = (url: string): Db =>
+  fromPostgres(postgres(withoutChannelBinding(url), { prepare: false }));
 
 export const pgliteDb = async (): Promise<Db> => {
   const { PGlite } = await import('@electric-sql/pglite');
