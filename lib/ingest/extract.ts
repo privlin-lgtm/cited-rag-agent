@@ -10,6 +10,8 @@ const PARAGRAPH_START = /^(?:[A-Z0-9•●▪"“(]|[-–]\s)/;
 const MARKER = /^(?:[•●▪]|[-–]\s|\d{1,3}[.)]\s|\(?[a-z0-9]{1,3}\)\s)/;
 const FENCE = /^\s*(?:```|~~~)/;
 const HEADING = /^#{1,6}\s/;
+const IMAGE_ONLY = /^\s*(?:\[\s*)?!\[[^\]]*\]\([^)]*\)(?:\s*\]\([^)]*\))?\s*$/;
+const EDGE_LINES = 3;
 const FRONT_MATTER = /^---\n(?:[A-Za-z_][\w-]*:.*\n|[ \t].*\n|-\s.*\n|\n)*?---\n/;
 
 const clean = (text: string) => text.replaceAll('\0', '').replace(/\r\n?/g, '\n');
@@ -31,17 +33,24 @@ const blocks = (lines: string[], fenceAware = false): Paragraph[] => {
   return out.filter(({ text }) => text);
 };
 
-const pdfParagraphs = (page: string): Paragraph[] => {
+const normalizeLine = (line: string) => line.replace(/\s+/g, ' ').replace(/\d+/g, '#');
+const isEdge = (i: number, count: number) => i < EDGE_LINES || i >= count - EDGE_LINES;
+
+const runningLines = (pages: string[][]) => {
+  const counts = new Map<string, number>();
+  for (const lines of pages)
+    for (const line of new Set(lines.filter((_, i) => isEdge(i, lines.length)).map(normalizeLine))) counts.set(line, (counts.get(line) ?? 0) + 1);
+  const threshold = Math.max(3, Math.ceil(pages.length / 3));
+  return new Set([...counts].filter(([, count]) => count >= threshold).map(([line]) => line));
+};
+
+const pdfParagraphs = (lines: string[]): Paragraph[] => {
   const groups: { text: string[]; first: number }[] = [];
-  clean(page)
-    .split('\n')
-    .map((line) => line.trim())
-    .forEach((line, i, all) => {
-      if (!line) return;
-      const previous = all.slice(0, i).findLast(Boolean);
-      if (!previous || (SENTENCE_END.test(previous) && PARAGRAPH_START.test(line)) || MARKER.test(line)) groups.push({ text: [line], first: i + 1 });
-      else groups[groups.length - 1].text.push(line);
-    });
+  lines.forEach((line, i) => {
+    const previous = lines[i - 1];
+    if (!previous || (SENTENCE_END.test(previous) && PARAGRAPH_START.test(line)) || MARKER.test(line)) groups.push({ text: [line], first: i + 1 });
+    else groups[groups.length - 1].text.push(line);
+  });
   return groups.map(({ text, first }) => ({ text: text.join('\n'), lines: [first, first + text.length - 1] }));
 };
 
@@ -59,6 +68,7 @@ const markdownParts = (source: string): Part[] => {
   };
   for (const line of source.replace(FRONT_MATTER, '').split('\n')) {
     if (FENCE.test(line)) fenced = !fenced;
+    if (!fenced && IMAGE_ONLY.test(line)) continue;
     const heading = !fenced && /^(#{1,6})\s+(.+?)\s*#*\s*$/.exec(line);
     if (heading) {
       if (buffer.some((previous) => previous.trim() && !HEADING.test(previous))) flush();
@@ -74,9 +84,16 @@ const markdownParts = (source: string): Part[] => {
 export const extract = async (kind: Kind, data: Uint8Array): Promise<Extracted> => {
   if (kind === 'pdf') {
     const { totalPages, text } = await extractText(new Uint8Array(data), { mergePages: false });
+    const pages = text.map((page) => clean(page).split('\n').map((line) => line.trim()).filter(Boolean));
+    const running = runningLines(pages);
     return {
       pages: totalPages,
-      parts: text.map((page, i) => ({ locator: `p. ${i + 1}`, paragraphs: pdfParagraphs(page) })).filter(({ paragraphs }) => paragraphs.length),
+      parts: pages
+        .map((lines, i) => ({
+          locator: `p. ${i + 1}`,
+          paragraphs: pdfParagraphs(lines.filter((line) => !running.has(normalizeLine(line)))),
+        }))
+        .filter(({ paragraphs }) => paragraphs.length),
     };
   }
   const source = clean(new TextDecoder().decode(data));

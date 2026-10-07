@@ -27,10 +27,12 @@ const { embeddings, tokens } = await createEmbedder({ apiKey: VOYAGE_API_KEY })(
 );
 console.log(`query embeddings used ${tokens} Voyage tokens`);
 
+const documentIds = (await db.query<{ id: string }>("select id::text as id from documents where collection = 'corpus'")).map(({ id }) => id);
+
 for (const [i, { question, terms }] of CHECKS.entries()) {
   console.log(`\nQ: ${question}`);
-  show('semantic, top 3', await semanticSearch(db, embeddings[i], { k: 3 }));
-  show(`keyword "${terms}", top 3`, await keywordSearch(db, terms, { k: 3 }));
+  show('semantic, top 3', await semanticSearch(db, embeddings[i], { k: 3, documentIds }));
+  show(`keyword "${terms}", top 3`, await keywordSearch(db, terms, { k: 3, documentIds }));
 }
 
 for (const page of TABLE_PAGES) {

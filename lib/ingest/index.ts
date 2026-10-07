@@ -4,7 +4,7 @@ import type { Embedder } from '../embed';
 import { chunkParts } from './chunk';
 import { extract, type Kind } from './extract';
 
-export const INGEST_VERSION = 1;
+export const INGEST_VERSION = 2;
 const INSERT_BATCH = 100;
 
 export type IngestInput = { collection: string; filename: string; kind: Kind; data: Uint8Array };

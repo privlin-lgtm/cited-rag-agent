@@ -5,8 +5,6 @@ import { postgresDb, type Db } from '../lib/db';
 import { createEmbedder, type Embedder } from '../lib/embed';
 import { ingestDocument, type IngestReport } from '../lib/ingest';
 
-const NO_CARD_LIMITS = { maxBatchTokens: 3000, minIntervalMs: 21_000 };
-
 export type CorpusReport = { filename: string } & IngestReport;
 
 export const ingestCorpus = async (db: Db, embed: Embedder, onReport?: (report: CorpusReport) => void) => {
@@ -24,7 +22,7 @@ export const ingestCorpus = async (db: Db, embed: Embedder, onReport?: (report: 
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   const { DATABASE_URL, VOYAGE_API_KEY } = z.object({ DATABASE_URL: z.url(), VOYAGE_API_KEY: z.string().min(1) }).parse(process.env);
-  const reports = await ingestCorpus(postgresDb(DATABASE_URL), createEmbedder({ apiKey: VOYAGE_API_KEY, ...NO_CARD_LIMITS }), (report) =>
+  const reports = await ingestCorpus(postgresDb(DATABASE_URL), createEmbedder({ apiKey: VOYAGE_API_KEY }), (report) =>
     console.log(
       report.filename.padEnd(62),
       report.status.padEnd(9),
