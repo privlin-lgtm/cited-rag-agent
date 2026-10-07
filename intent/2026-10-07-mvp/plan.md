@@ -96,7 +96,7 @@ From nothing to the spec's four tables:
 
 ## Risks
 1. **M3 slips past Thursday morning:** the walk-through and the application move to Thursday afternoon; the planning session flags it as soon as it's clear.
-2. **Voyage rate limits:** `voyage-4` allows 2,000 requests and 8M tokens a minute, at up to 1,000 texts or 320K tokens per request. The 0.4M-token corpus is a handful of requests and takes under a minute. Keep exponential backoff on 429s; no card is needed.
+2. **Voyage rate limits:** with no payment method on the account, Voyage allows 3 requests and 10K tokens a minute (its 429 reply says so). The standard limits for `voyage-4` (2,000 requests and 8M tokens a minute) need a card, and the 200M free tokens apply either way. The M2 ingest therefore batches by about 3K estimated tokens, starts at most one request every 21 s and keeps exponential backoff on 429s. The corpus is about 0.2M estimated tokens, so a first ingest takes about 25 minutes. Each question's query embedding is one request, so with no card the app can embed about three questions a minute before the keyword fallback (spec feature 6) takes over. Whether to add a card is Paul's decision; with one, the spend cap in spec concern 1 is the budget alert only.
 3. **A corpus source refuses scripted downloads:** Paul downloads it once in a browser into `corpus/files/`, and the hash goes into the manifest.
 4. **Multi-call agent latency on Vercel:** `maxDuration` of 120 s (Pro allows up to 800), streaming so progress is visible, and the round cap.
 5. **PDF extraction on the CFPB guide's tables:** inspect the extracted text in M2 and adjust the packing and the splitter's table-row rule.
