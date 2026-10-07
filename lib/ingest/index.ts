@@ -45,7 +45,7 @@ export const ingestDocument = async (
       await tx.query(
         `insert into chunks (document_id, ord, locator, content, embedding)
          select $1::uuid, (r->>'ord')::int, r->>'locator', r->>'content', (r->>'embedding')::vector
-         from jsonb_array_elements($2::jsonb) with ordinality as t(r, i)
+         from jsonb_array_elements($2::text::jsonb) with ordinality as t(r, i)
          order by i`,
         [
           id,

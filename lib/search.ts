@@ -3,7 +3,8 @@ import type { Db } from './db';
 export type Hit = { id: string; filename: string; locator: string; content: string; score: number };
 export type SearchOptions = { k?: number; documentIds?: string[] };
 
-const inScope = (n: number) => `($${n}::jsonb is null or d.id::text in (select jsonb_array_elements_text($${n}::jsonb)))`;
+const inScope = (n: number) =>
+  `($${n}::text::jsonb is null or d.id::text in (select jsonb_array_elements_text($${n}::text::jsonb)))`;
 const scopeParam = (documentIds?: string[]) => (documentIds ? JSON.stringify(documentIds) : null);
 
 export const semanticSearch = (db: Db, embedding: number[], { k = 5, documentIds }: SearchOptions = {}) =>

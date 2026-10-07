@@ -79,6 +79,14 @@ describe('createEmbedder', () => {
     expect(result.tokens).toBe(10);
   });
 
+  it('waits at least as long as Retry-After asks', async () => {
+    const responses = [new Response('slow', { status: 429, headers: { 'retry-after': '45' } })];
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => responses.shift() ?? ok(JSON.parse(init?.body as string).input));
+    const sleep = vi.fn<(ms: number) => Promise<void>>(async () => {});
+    await createEmbedder({ apiKey: 'k', fetchImpl, sleep })(['text 1'], 'document');
+    expect(sleep.mock.calls.map(([ms]) => ms)).toEqual([45_000]);
+  });
+
   it('gives up after repeated 429s and reports the status', async () => {
     const fetchImpl = vi.fn(async () => new Response('rate limited', { status: 429 }));
     const sleep = vi.fn<(ms: number) => Promise<void>>(async () => {});

@@ -64,6 +64,25 @@ describe('extract', () => {
     ]);
   });
 
+  it('carries a heading with no body into the next section instead of giving it a chunk of its own', async () => {
+    const { parts } = await extract('md', bytes('# Use Cases\n## Perform Transfer\nSteps follow here.\n\n## Next\nMore.'));
+    expect(parts.map(({ locator }) => locator)).toEqual(['§ Use Cases › Perform Transfer', '§ Use Cases › Next']);
+    expect(parts[0].paragraphs[0].text).toBe('# Use Cases\n## Perform Transfer\nSteps follow here.');
+  });
+
+  it('does not treat ~~~ or ``` lines in plain text as code fences', async () => {
+    const { parts } = await extract('txt', bytes('Intro one.\n\n~~~~~~~~~~\n\nPara A.\n\nPara B.'));
+    expect(parts[0].paragraphs.map(({ text }) => text)).toEqual(['Intro one.', '~~~~~~~~~~', 'Para A.', 'Para B.']);
+  });
+
+  it('drops YAML front matter but keeps a section that follows a leading horizontal rule', async () => {
+    const rule = await extract('md', bytes('---\nFirst section.\n\n---\n\n# Title\nBody.'));
+    expect(rule.parts.flatMap(({ paragraphs }) => paragraphs.map(({ text }) => text)).join('\n')).toContain('First section.');
+    const yaml = await extract('md', bytes('---\ntitle: x\ntags:\n  - a\n---\n# Title\nBody.'));
+    expect(yaml.parts).toHaveLength(1);
+    expect(yaml.parts[0].paragraphs[0].text).toBe('# Title\nBody.');
+  });
+
   it('removes NUL characters, which Postgres rejects', async () => {
     const { parts } = await extract('txt', bytes('a\0b'));
     expect(parts[0].paragraphs[0].text).toBe('ab');

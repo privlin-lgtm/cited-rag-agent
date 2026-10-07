@@ -3,7 +3,7 @@ import { readdir } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { corpusDir, loadManifest, readCorpusFile } from './corpus';
+import { corpusDir, loadManifest, manifestSchema, readCorpusFile } from './corpus';
 
 const sha256 = (bytes: Uint8Array) => createHash('sha256').update(bytes).digest('hex');
 
@@ -22,6 +22,13 @@ describe('corpus', () => {
       .map((entry) => relative(root, join(entry.parentPath, entry.name)).replaceAll('\\', '/'))
       .sort();
     expect(onDisk).toEqual([...documents, ...licenceFiles].map(({ filename }) => filename).sort());
+  });
+
+  it('rejects manifest filenames that could leave corpus/files', () => {
+    const entry = { id: 'a', title: 'A', filename: 'a.pdf', kind: 'pdf', sourceUrl: 'https://example.test/a.pdf', licence: 'L', attribution: 'A', sha256: 'a'.repeat(64) };
+    expect(manifestSchema.safeParse({ documents: [entry], licenceFiles: [] }).success).toBe(true);
+    for (const filename of ['../a.pdf', 'x/../a.pdf', '/a.pdf', 'a b.pdf', 'a#b.pdf', 'a?.pdf', 'a%2e.pdf'])
+      expect(manifestSchema.safeParse({ documents: [{ ...entry, filename }], licenceFiles: [] }).success, filename).toBe(false);
   });
 
   it('gives every document a unique id and a file extension that matches its kind', async () => {

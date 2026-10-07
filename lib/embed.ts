@@ -59,7 +59,8 @@ export const createEmbedder = ({
         body: JSON.stringify({ input, model: EMBEDDING_MODEL, input_type: inputType, truncation: false, output_dimension: EMBEDDING_DIMENSIONS }),
       });
       if (res.status === 429 && attempt < MAX_RETRIES) {
-        await sleep(Math.min(2 ** attempt * 1000, MAX_BACKOFF_MS));
+        await res.body?.cancel();
+        await sleep(Math.max(Math.min(2 ** attempt * 1000, MAX_BACKOFF_MS), (Number(res.headers.get('retry-after')) || 0) * 1000));
         continue;
       }
       if (!res.ok) throw new Error(`Voyage embeddings failed with HTTP ${res.status}: ${await res.text()}`);
