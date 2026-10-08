@@ -1,0 +1,31 @@
+name: Sandbox cleanup
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Call the Sandbox cleanup route
+        env:
+          CRON_SECRET: ${{ secrets.SANDBOX_CRON_SECRET }}
+        run: |
+          status=0
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            --output response.json \
+            https://cited-rag-agent-git-sandbox-privlin.vercel.app/api/cron/cleanup || status=$?
+          {
+            echo '### Sandbox cleanup'
+            echo '```json'
+            cat response.json
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
