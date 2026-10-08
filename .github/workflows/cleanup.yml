@@ -7,6 +7,10 @@ on:
 
 permissions: {}
 
+concurrency:
+  group: sandbox-cleanup
+  cancel-in-progress: false
+
 jobs:
   cleanup:
     runs-on: ubuntu-latest

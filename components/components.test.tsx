@@ -1,6 +1,6 @@
 import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
-import type { Excerpt } from '../lib/agent/citations';
+import type { CitationCheck, Excerpt } from '../lib/agent/citations';
 import type { StepEvent } from '../lib/agent/loop';
 import { initialRun, type CitationsEvent, type RunState } from '../lib/run-state';
 import { AnswerPanel } from './answer-panel';
@@ -36,6 +36,59 @@ describe('AnswerPanel status line', () => {
     expect(answer({ ...afterFirstStep, error: { type: 'error', message: 'Overloaded', excerpts: [] } }, true)).not.toContain(STATUS);
     expect(answer(afterFirstStep, true, 'The connection was lost.')).not.toContain(STATUS);
     expect(answer(afterFirstStep, false)).not.toContain(STATUS);
+  });
+});
+
+describe('AnswerPanel citation header and markers', () => {
+  const NOT_CHECKED = 'This answer has no checked citation. Treat it as unverified.';
+  const checked: CitationCheck = { ok: true, excerpt: 1, chunkId: '10', blocks: [0, 1] };
+  const failed: CitationCheck = { ok: false, reason: 'text' };
+  const answer = (results: CitationCheck[], segments: CitationsEvent['segments'], status: CitationsEvent['status'] = 'complete') =>
+    renderToStaticMarkup(<AnswerPanel run={{ ...initialRun, citations: { type: 'citations', status, segments, results, excerpts: [] } }} running={false} />);
+  const badge = (html: string, text: string) => html.match(new RegExp(`<span class="([^"]*)">${text}</span>`))?.[1];
+  const count = (html: string, needle: string) => html.split(needle).length - 1;
+
+  it('shows a failed citation as an "unchecked" badge that carries the reason, with no [n] link', () => {
+    const html = answer([failed], [{ text: 'Thirty minutes.', refs: [0] }]);
+    expect(count(html, '>unchecked<')).toBe(1);
+    expect(html).toContain('title="The check failed: text"');
+    expect(html).not.toContain('href="#excerpt-');
+  });
+
+  it('counts one checked and one failed citation, with one [n] link and one "unchecked" badge', () => {
+    const html = answer([checked, failed], [{ text: 'First.', refs: [0] }, { text: ' Second.', refs: [1] }]);
+    expect(badge(html, '1 of 2 citations checked')).toContain('bg-emerald-50');
+    expect(count(html, 'href="#excerpt-1"')).toBe(1);
+    expect(count(html, 'href="#excerpt-')).toBe(1);
+    expect(count(html, '>unchecked<')).toBe(1);
+    expect(html).not.toContain(NOT_CHECKED);
+  });
+
+  it('shows a red badge and the red box when citations were given and none was checked', () => {
+    const html = answer([failed, failed], [{ text: 'Thirty minutes.', refs: [0, 1] }]);
+    expect(badge(html, '0 of 2 citations checked')).toContain('bg-red-50');
+    expect(html).toContain(NOT_CHECKED);
+  });
+
+  it('shows "no citations" in the neutral badge, with no red box, when nothing was cited', () => {
+    const html = answer([], [{ text: 'The documents do not cover this.', refs: [] }]);
+    const classes = badge(html, 'no citations');
+    expect(classes).toContain('text-zinc-700');
+    expect(classes).not.toMatch(/red|emerald/);
+    expect(html).not.toContain(NOT_CHECKED);
+    expect(html).not.toContain('bg-red-50');
+    expect(html).not.toContain('citations checked');
+  });
+
+  it('keeps the cut-off badge beside "no citations"', () => {
+    expect(answer([], [{ text: 'Partial.', refs: [] }], 'cut_off')).toContain('>cut off<');
+  });
+
+  it('shows a declined answer as the declined message with no badge', () => {
+    const html = answer([], [], 'declined');
+    expect(html).toContain('Claude declined to answer this question.');
+    expect(html).not.toMatch(/no citations|citations checked|rounded-full/);
+    expect(html).not.toContain(NOT_CHECKED);
   });
 });
 
@@ -77,6 +130,14 @@ describe('ExcerptsPanel', () => {
     expect(html).toContain('3.2.1 Heading');
     expect(html).not.toMatch(/\*\*|\]\(|<br \/>|#####/);
     expect(html.match(/<mark /g)).toHaveLength(2);
+  });
+
+  it('renders <sup> footnote markers in .md excerpts as superscript, with a link inside shown as its text', () => {
+    const marked = [{ text: 'Interledger Payment Request protocol<sup>[1](https://interledger.org/rfcs/0011-interledger-payment-request)</sup>(ILP) and <sup>2</sup> more.', cited: false }];
+    const html = renderToStaticMarkup(<ExcerptsPanel excerpts={[excerpt('generic-transaction-patterns.md', marked)]} noAnswer={false} />);
+    expect(html).toContain('Interledger Payment Request protocol<sup>1</sup>(ILP) and <sup>2</sup> more.');
+    expect(html).not.toMatch(/&lt;|\]\(/);
+    expect(renderToStaticMarkup(<ExcerptsPanel excerpts={[excerpt('regulation-e-subpart-b.txt', marked)]} noAnswer={false} />)).toContain('&lt;sup&gt;2&lt;/sup&gt;');
   });
 
   it('shows the stored text of other files as it is', () => {

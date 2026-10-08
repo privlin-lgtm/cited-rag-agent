@@ -29,7 +29,7 @@ Next.js 16 (App Router) and React 19 on Vercel; TypeScript; Tailwind 4. Postgres
 
 - Per address: 15 questions an hour and 10 uploads a day.
 - Uploads: one `.md`, `.pdf` or `.txt` file of at most 4 MB, 40 pages and 100,000 estimated tokens, deleted after 24 hours.
-- Spend: $1 a day for the model, with $0.10 held for each question while it runs, and 2M embedding tokens a day.
+- Spend: a daily model budget, $1 by default and raised on demo days, with $0.10 held for each question while it runs, and 2M embedding tokens a day.
 - Measured over 12 runs of the four example questions: $0.0365 and 7.8 s per question on average.
 
 ## Running locally

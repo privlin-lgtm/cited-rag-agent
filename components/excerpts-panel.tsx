@@ -10,6 +10,8 @@ const Rendered = ({ text }: { text: string }) =>
       <code key={i} className="rounded bg-zinc-100 px-1 font-mono text-[0.9em] dark:bg-zinc-800">
         {part.text}
       </code>
+    ) : part.kind === 'sup' ? (
+      <sup key={i}>{part.text}</sup>
     ) : part.kind === 'br' ? (
       <br key={i} />
     ) : (

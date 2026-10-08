@@ -12,10 +12,10 @@ export const AnswerPanel = ({ run, running, problem }: { run: RunState; running:
       {citations && citations.status !== 'declined' && (
         <div>
           <div className="mb-2 flex flex-wrap items-center gap-2">
-            <Badge variant={checkedCount(citations) > 0 ? 'license' : 'danger'}>{header(citations)}</Badge>
+            <Badge variant={citations.results.length === 0 ? 'default' : checkedCount(citations) > 0 ? 'license' : 'danger'}>{header(citations)}</Badge>
             {citations.status === 'cut_off' && <Badge variant="restricted">cut off</Badge>}
           </div>
-          {checkedCount(citations) === 0 && (
+          {citations.results.length > 0 && checkedCount(citations) === 0 && (
             <p className="mb-2 rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">
               This answer has no checked citation. Treat it as unverified.
             </p>
