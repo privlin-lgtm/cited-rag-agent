@@ -46,7 +46,14 @@ export const AnswerPanel = ({ run, running, problem }: { run: RunState; running:
           {error.excerpts.length > 0 && <p className="mt-1">The passages retrieved so far are shown beside this.</p>}
         </div>
       )}
-      {!citations && !error && !problem && (pending ? <Prose className="text-[15px] leading-relaxed text-zinc-500" pieces={[pending]} /> : !running && <p className="text-sm text-zinc-500">Ask a question to see the answer and its checked citations.</p>)}
+      {!citations && !error && !problem && pending && <Prose className="text-[15px] leading-relaxed text-zinc-500" pieces={[pending]} />}
+      {!citations && !error && !problem && !pending && running && run.steps.length > 0 && (
+        <p className="flex items-center gap-2 text-sm text-zinc-500">
+          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-indigo-500" aria-hidden />
+          Reading the passages and writing the answer…
+        </p>
+      )}
+      {!citations && !error && !problem && !pending && !running && <p className="text-sm text-zinc-500">Ask a question to see the answer and its checked citations.</p>}
     </section>
   );
 };

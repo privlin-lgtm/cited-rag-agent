@@ -1,5 +1,21 @@
 import type { Excerpt } from '../lib/agent/citations';
+import { inlineMarkdown } from '../lib/inline-markdown';
 import { Badge } from './ui/badge';
+
+const Rendered = ({ text }: { text: string }) =>
+  inlineMarkdown(text).map((part, i) =>
+    part.kind === 'bold' ? (
+      <strong key={i}>{part.text}</strong>
+    ) : part.kind === 'code' ? (
+      <code key={i} className="rounded bg-zinc-100 px-1 font-mono text-[0.9em] dark:bg-zinc-800">
+        {part.text}
+      </code>
+    ) : part.kind === 'br' ? (
+      <br key={i} />
+    ) : (
+      part.text
+    ),
+  );
 
 export const ExcerptsPanel = ({ excerpts, noAnswer }: { excerpts: Excerpt[]; noAnswer: boolean }) => (
   <section aria-label="Excerpts">
@@ -19,15 +35,16 @@ export const ExcerptsPanel = ({ excerpts, noAnswer }: { excerpts: Excerpt[]; noA
             )}
           </header>
           <p className="leading-relaxed text-zinc-700 dark:text-zinc-300">
-            {excerpt.blocks.map((block, i) =>
-              block.cited ? (
+            {excerpt.blocks.map((block, i) => {
+              const body = /\.md$/i.test(excerpt.file) ? <Rendered text={block.text} /> : block.text;
+              return block.cited ? (
                 <mark key={i} className="rounded bg-yellow-200 px-0.5 text-zinc-900 dark:bg-yellow-500/40 dark:text-zinc-50">
-                  {block.text}{' '}
+                  {body}{' '}
                 </mark>
               ) : (
-                <span key={i}>{block.text} </span>
-              ),
-            )}
+                <span key={i}>{body} </span>
+              );
+            })}
           </p>
         </article>
       ))}

@@ -14,6 +14,8 @@ const label = (step: StepEvent) => {
   }
 };
 
+const scoreLabel = (step: StepEvent) => (step.fallback || step.tool === 'keyword_search' ? 'keyword rank' : step.tool === 'search_documents' ? 'similarity' : '');
+
 const MAX_HITS = 5;
 
 export const Timeline = ({ steps, running }: { steps: StepEvent[]; running: boolean }) => (
@@ -40,7 +42,11 @@ export const Timeline = ({ steps, running }: { steps: StepEvent[]; running: bool
               {step.hits.slice(0, MAX_HITS).map((hit, j) => (
                 <li key={j} className="break-words">
                   {hit.file} · {hit.locator}
-                  {hit.score !== null && <span className="ml-1 text-zinc-400">{hit.score.toFixed(3)}</span>}
+                  {hit.score !== null && (
+                    <span className="ml-1 text-zinc-400">
+                      {scoreLabel(step)} {hit.score.toFixed(3)}
+                    </span>
+                  )}
                 </li>
               ))}
               {step.hits.length > MAX_HITS && <li>+{step.hits.length - MAX_HITS} more</li>}

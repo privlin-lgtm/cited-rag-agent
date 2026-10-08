@@ -11,7 +11,8 @@ import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 
 const MAX_QUESTION = 500;
-const CHAIN = 'https://github.com/privlin-lgtm/cited-rag-agent/blob/master/intent/2026-10-07-mvp';
+const REPO = 'https://github.com/privlin-lgtm/cited-rag-agent';
+const CHAIN = `${REPO}/blob/HEAD/intent/2026-10-07-mvp`;
 
 const apiError = async (response: Response) => ((await response.json().catch(() => null)) as { error?: string } | null)?.error ?? `The request failed (HTTP ${response.status}).`;
 
@@ -98,14 +99,22 @@ export function Workspace({ env, examples, initialDocuments }: { env: string; ex
 
   return (
     <div className="mx-auto flex min-h-screen max-w-[100rem] flex-col px-4 py-6 sm:px-6">
-      <header className="mb-6 flex flex-wrap items-center justify-between gap-3">
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-xl font-semibold">cited-rag-agent</h1>
           <p className="text-sm text-zinc-600 dark:text-zinc-400">Agentic RAG over cross-border payments documents. Every citation is checked against the text it came from.</p>
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Claude searches the documents with tools and cites passages; each citation is checked against the stored text before it is marked checked.
+          </p>
         </div>
-        <Badge className="uppercase tracking-wide" title="Environment">
-          {env}
-        </Badge>
+        <div className="flex items-center gap-3">
+          <a className="text-sm underline underline-offset-4" href={REPO}>
+            GitHub
+          </a>
+          <Badge className="uppercase tracking-wide" title="Environment">
+            {env}
+          </Badge>
+        </div>
       </header>
 
       <main className="grid flex-1 gap-8 lg:grid-cols-[17rem_minmax(0,1fr)_22rem]">

@@ -1,9 +1,13 @@
 import type { Metadata } from 'next';
 import './globals.css';
 
+const title = 'cited-rag-agent';
+const description = 'Agentic RAG over a cross-border payments corpus, with every citation checked against the stored text.';
+
 export const metadata: Metadata = {
-  title: 'cited-rag-agent',
-  description: 'Agentic RAG over a cross-border payments corpus, with every citation checked.',
+  title,
+  description,
+  openGraph: { title, description, type: 'website' },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
