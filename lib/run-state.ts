@@ -45,7 +45,8 @@ export const reduce = (state: RunState, event: WireEvent): RunState => {
 
 export const checkedCount = (citations: CitationsEvent) => citations.results.filter(({ ok }) => ok).length;
 
-export const header = (citations: CitationsEvent) => `${checkedCount(citations)} of ${citations.results.length} citations checked`;
+export const header = (citations: CitationsEvent) =>
+  citations.results.length > 0 ? `${checkedCount(citations)} of ${citations.results.length} citations checked` : 'no citations';
 
 export type Marker = { kind: 'checked'; n: number } | { kind: 'unchecked'; reason: string };
 

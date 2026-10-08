@@ -50,7 +50,12 @@ describe('citation display', () => {
   it('counts checked citations and words the header', () => {
     expect(checkedCount(event)).toBe(3);
     expect(header(event)).toBe('3 of 4 citations checked');
-    expect(header(citations([]))).toBe('0 of 0 citations checked');
+  });
+
+  it('words the header "no citations" when nothing was cited, and counts once something was', () => {
+    expect(header(citations([]))).toBe('no citations');
+    expect(header(citations([{ ok: false, reason: 'text' }]))).toBe('0 of 1 citations checked');
+    expect(header(citations([{ ok: true, excerpt: 1, chunkId: '10', blocks: [0, 1] }, { ok: false, reason: 'text' }]))).toBe('1 of 2 citations checked');
   });
 
   it('shows one marker per excerpt and one red marker per failed citation', () => {
