@@ -103,9 +103,9 @@ Revised 2026-10-08 with the first-cut fixes (`fix/first-cut`): features 2, 7, 9,
      - File and locator come from the database, never from the model's text.
      - A chunk cited through several indices is shown once, with all its cited sentences highlighted.
      - A failed citation shows in red as "unchecked", never as checked.
-     - The answer header reads "N of M citations checked".
+     - The answer header reads "N of M citations checked". An answer that cites nothing (a refusal, or a plain "the documents don't cover this") reads "no citations" in a neutral badge; red is kept for answers whose citations were given and none passed the check.
 9. **Excerpts.** Beside the answer, each cited chunk shows its file, its locator and the chunk text with the cited sentences highlighted, plus a link to the source document.
-   - **Markdown documents:** for a file whose name ends in `.md`, the excerpt renders inline Markdown for display only: `**bold**`, `` `code` `` (also inside bold), `[text](target)` as its text, `<br />` as a line break, and a heading marker (`#` to `######`) at the start of a block dropped. The highlighted blocks, the stored text and the citation check are unchanged. Other files show the stored text as it is.
+   - **Markdown documents:** for a file whose name ends in `.md`, the excerpt renders inline Markdown for display only: `**bold**`, `` `code` `` (also inside bold), `[text](target)` as its text, `<br />` as a line break, `<sup>…</sup>` as superscript with a link inside shown as its text, and a heading marker (`#` to `######`) at the start of a block dropped. The highlighted blocks, the stored text and the citation check are unchanged. Other files show the stored text as it is.
 10. **Abuse and spend limits** (b.8, c).
     - **Windows:** fixed. `window_start` is the start of the UTC hour or UTC day.
     - **Buckets:**
@@ -117,6 +117,7 @@ Revised 2026-10-08 with the first-cut fixes (`fix/first-cut`): features 2, 7, 9,
       - Questions and uploads are reserved before any model call, and they still count if the call fails. The question is reserved right after the body validates and before the session and document lookup, so a flood does no unthrottled database work.
       - **Budget reservation:** after the scope check, a question adds $0.10 (100,000 micro-dollars) to `anthropic:usd` with the same upsert. If the returned total passes the budget, it takes the $0.10 back and is refused with the reset time. A question therefore starts only while the day's total plus $0.10 stays within the budget, however many start together.
       - **True-up:** cost (in micro-dollars) is added after each model call, from the response's `usage`, and the $0.10 is released when the run ends on any path (complete, cut off, declined, model error, a thrown error, a client that left). The window then holds the actual cost. A run killed by the platform before it ends leaves its $0.10 held until the window expires.
+      - **Overshoot bound:** runs that start together can pass the budget by at most (budget ÷ $0.10) × (a run's cost − $0.10). The 15-an-hour limit per address and the 120 s function cap make that implausible for a demo.
       - **Embedding tokens** are debited as each Voyage response arrives, batch by batch, for uploads and questions alike, so tokens spent before a failure still count. An upload's estimate (feature 2) is checked against the day's total before the first batch.
     - **Server log:** when a run ends, `handleAsk` writes one `console.info` line of JSON: `event` ("ask"), `status` (`complete`, `cut_off`, `declined` or `error`), `model`, `rounds` (tool rounds run), `toolCalls`, `keywordFallbacks`, the four token counts, `costUsd` and `latencyMs`. It never holds the question, document ids, the session id or the address hash.
     - **IP:** the first address in `x-forwarded-for`, which Vercel sets. The hash is HMAC-SHA256 keyed with `IP_HASH_SECRET`, first 16 hex characters.
