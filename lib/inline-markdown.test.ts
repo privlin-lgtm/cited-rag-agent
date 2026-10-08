@@ -69,6 +69,41 @@ describe('inlineMarkdown on lines of the Mojaloop generic transaction patterns',
     ]);
   });
 
+  describe('<sup> footnote markers', () => {
+    const supLines = lines.filter((candidate) => candidate.includes('<sup>'));
+
+    it('are on five lines of the document', () => {
+      expect(supLines).toHaveLength(5);
+    });
+
+    it('become sup parts that hold the link text, in the sentence that cites four footnotes', () => {
+      const parts = inlineMarkdown(supLines[0]);
+      expect(parts.filter(({ kind }) => kind === 'sup')).toEqual(['1', '2', '3', '4'].map((text) => ({ kind: 'sup', text })));
+      expect(plain(supLines[0])).not.toMatch(/<\/?sup>|\]\(/);
+      expect(plain(supLines[0])).toContain('Interledger Payment Request protocol1(ILP)');
+    });
+
+    it.each([1, 2, 3, 4])('make footnote %i a sup part followed by the link shown as its text', (n) => {
+      const [marker, ...rest] = inlineMarkdown(supLines[n]);
+      expect(marker).toEqual({ kind: 'sup', text: String(n) });
+      expect(rest).toHaveLength(1);
+      expect(rest[0].kind).toBe('text');
+      expect(rest[0].text).toMatch(/^ https:\/\/interledger\.org/);
+      expect(rest[0].text).not.toContain('](');
+    });
+
+    it('parse their inside the way bold does', () => {
+      expect(inlineMarkdown('See<sup>[7](https://example.org)</sup> and<sup>`n`</sup> end.')).toEqual([
+        { kind: 'text', text: 'See' },
+        { kind: 'sup', text: '7' },
+        { kind: 'text', text: ' and' },
+        { kind: 'code', text: 'n' },
+        { kind: 'text', text: ' end.' },
+      ]);
+      expect(inlineMarkdown('a <sup></sup> b')).toEqual([{ kind: 'text', text: 'a  b' }]);
+    });
+  });
+
   it('returns text it does not recognise unchanged', () => {
     expect(inlineMarkdown('Variables are _{ID}_ in italics, and 2 * 3 * 4 stays.')).toEqual([{ kind: 'text', text: 'Variables are _{ID}_ in italics, and 2 * 3 * 4 stays.' }]);
     expect(inlineMarkdown('')).toEqual([]);
@@ -78,12 +113,12 @@ describe('inlineMarkdown on lines of the Mojaloop generic transaction patterns',
 describe('inlineMarkdown on every line of the Mojaloop documents', () => {
   const files = readdirSync(folder).filter((name) => name.endsWith('.md') && name !== 'LICENSE.md');
 
-  it.each(files)('leaves no bold, code, link, heading or <br> syntax in %s', (name) => {
+  it.each(files)('leaves no bold, code, link, heading, <sup> or <br> syntax in %s', (name) => {
     const leftovers = readFileSync(new URL(name, folder), 'utf8')
       .split('\n')
       .filter((candidate) => !candidate.trimStart().startsWith('```'))
       .map((candidate) => plain(candidate))
-      .filter((rendered) => /\*\*[^*]+\*\*|`[^`]+`|\]\(|<br\s*\/?>|^\s*#{1,6}\s/i.test(rendered));
+      .filter((rendered) => /\*\*[^*]+\*\*|`[^`]+`|\]\(|<br\s*\/?>|<\/?sup>|^\s*#{1,6}\s/i.test(rendered));
     expect(leftovers).toEqual([]);
   });
 });

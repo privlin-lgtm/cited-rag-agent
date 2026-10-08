@@ -1,6 +1,6 @@
-export type Inline = { kind: 'text' | 'bold' | 'code' | 'br'; text: string };
+export type Inline = { kind: 'text' | 'bold' | 'code' | 'br' | 'sup'; text: string };
 
-const TOKEN = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]*)\]\([^)]*\)|<br\s*\/?>/gi;
+const TOKEN = /\*\*([^*]+)\*\*|`([^`]+)`|\[([^\]]*)\]\([^)]*\)|<sup>(.*?)<\/sup>|<br\s*\/?>/gi;
 const HEADING = /^\s*#{1,6}\s+/;
 
 const parse = (source: string): Inline[] => {
@@ -12,9 +12,10 @@ const parse = (source: string): Inline[] => {
   };
   let end = 0;
   for (const match of source.matchAll(TOKEN)) {
-    const [whole, bold, code, link] = match;
+    const [whole, bold, code, link, sup] = match;
     if (match.index > end) push({ kind: 'text', text: source.slice(end, match.index) });
     if (bold !== undefined) for (const part of parse(bold)) push(part.kind === 'text' ? { kind: 'bold', text: part.text } : part);
+    else if (sup !== undefined) for (const part of parse(sup)) push(part.kind === 'text' ? { kind: 'sup', text: part.text } : part);
     else if (code !== undefined) push({ kind: 'code', text: code });
     else if (link !== undefined) push({ kind: 'text', text: link });
     else push({ kind: 'br', text: '' });
