@@ -43,7 +43,8 @@ export const Timeline = ({ steps, running }: { steps: StepEvent[]; running: bool
                 <li key={j} className="break-words">
                   {hit.file} · {hit.locator}
                   {hit.score !== null && (
-                    <span className="ml-1 text-zinc-400">
+                    <span className="text-zinc-400">
+                      {' '}
                       {scoreLabel(step)} {hit.score.toFixed(3)}
                     </span>
                   )}

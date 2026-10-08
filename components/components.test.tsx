@@ -43,7 +43,7 @@ describe('Timeline score labels', () => {
   const timeline = (steps: StepEvent[]) => renderToStaticMarkup(<Timeline steps={steps} running={false} />);
 
   it('labels search_documents scores as similarity and keyword scores as keyword rank', () => {
-    expect(timeline([step()])).toContain('similarity 0.612');
+    expect(timeline([step()]).replace(/<[^>]*>/g, '')).toContain('p. 1 similarity 0.612');
     expect(timeline([step({ tool: 'keyword_search', input: { terms: 'refund' }, hits: [{ file: 'b.txt', locator: 'lines 1–4', score: 0.2512 }] })])).toContain('keyword rank 0.251');
   });
 
