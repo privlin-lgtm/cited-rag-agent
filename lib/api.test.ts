@@ -13,6 +13,7 @@ const IP = '203.0.113.9';
 let fixture: Fixture;
 let modelCalls: ModelParams[];
 let script: (calls: ModelParams[]) => Message | Error;
+let gate: Promise<void>;
 
 const usage = { input_tokens: 100, output_tokens: 20, cache_creation_input_tokens: null, cache_read_input_tokens: null };
 const reply = (content: unknown[], stopReason: StopReason) =>
@@ -31,6 +32,7 @@ const cite = (index: number, start: number) => ({
 
 const model: ModelCall = async (params, onText) => {
   modelCalls.push(structuredClone(params));
+  await gate;
   const next = script(modelCalls);
   if (next instanceof Error) throw next;
   for (const block of next.content) if (block.type === 'text') onText(block.text);
@@ -50,8 +52,8 @@ const deps = (overrides: Partial<ApiDeps> = {}, session: string | null = 'sess1'
   ...overrides,
 });
 
-const askRequest = (body: unknown) =>
-  new Request('http://test/api/ask', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': IP }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+const askRequest = (body: unknown, address = IP) =>
+  new Request('http://test/api/ask', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': address }, body: typeof body === 'string' ? body : JSON.stringify(body) });
 
 type Line = { type: string; results?: unknown; costUsd: number; latencyMs: number; hits: { file: string }[] };
 const events = async (response: Response) =>
@@ -71,6 +73,7 @@ const spent = async (bucket: string) => (await fixture.db.query<{ count: number 
 beforeEach(async () => {
   fixture = await setup();
   modelCalls = [];
+  gate = Promise.resolve();
   script = () => reply([text('Nothing to cite.')], 'end_turn');
 });
 
@@ -82,10 +85,11 @@ describe('POST /api/ask', () => {
     ['a question that is not text', { question: 5 }],
     ['an empty document list', { question: 'ok', documentIds: [] }],
     ['a body that is not JSON', 'not json'],
-  ])('answers %s with 400 and calls no model', async (_name, body) => {
+  ])('answers %s with 400, calls no model and reserves nothing', async (_name, body) => {
     const response = await handleAsk(askRequest(body), deps());
     expect(response.status).toBe(400);
     expect(modelCalls).toHaveLength(0);
+    expect(await fixture.db.query('select bucket from usage_windows')).toEqual([]);
   });
 
   it('streams step, answer, citations and done events, and records cost and embedding tokens', async () => {
@@ -130,15 +134,62 @@ describe('POST /api/ask', () => {
     expect(response.status).toBe(429);
     expect(await response.json()).toMatchObject({ error: expect.stringContaining('Daily cost budget reached'), resetsAt: '2026-10-08T00:00:00.000Z' });
     expect(modelCalls).toHaveLength(0);
+    expect(await spent('anthropic:usd')).toBe(1_000_000);
   });
 
-  it("answers 400 for a document id outside the session, another session's upload included", async () => {
+  it('refuses a question with $0.95 spent, before any model call, and leaves the window at $0.95', async () => {
+    await addCost(fixture.db, 0.95, NOW);
+    const response = await handleAsk(askRequest({ question: 'Anything?' }), deps());
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining('Daily cost budget reached'), resetsAt: '2026-10-08T00:00:00.000Z' });
+    expect(modelCalls).toHaveLength(0);
+    expect(await spent('anthropic:usd')).toBe(950_000);
+  });
+
+  it('starts exactly one of ten simultaneous questions from ten addresses when $0.85 is spent', async () => {
+    await addCost(fixture.db, 0.85, NOW);
+    let open!: () => void;
+    gate = new Promise((resolve) => (open = resolve));
+    const responses = await Promise.all(Array.from({ length: 10 }, (_, i) => handleAsk(askRequest({ question: 'How long to cancel?' }, `203.0.113.${i + 10}`), deps())));
+    expect(responses.map(({ status }) => status).sort()).toEqual([200, 429, 429, 429, 429, 429, 429, 429, 429, 429]);
+    expect(await spent('anthropic:usd')).toBe(950_000);
+    open();
+    await events(responses.find(({ status }) => status === 200) as Response);
+    expect(modelCalls).toHaveLength(1);
+    expect(await spent('anthropic:usd')).toBe(850_000 + 400);
+  });
+
+  it.each([
+    ['a completed run', () => reply([text('Done.')], 'end_turn'), 400],
+    ['a cut-off run', () => reply([text('Partial')], 'max_tokens'), 400],
+    ['a run Claude declined', () => reply([], 'refusal'), 400],
+    ['a model error', () => new Error('Overloaded'), 0],
+    ['a thrown error', () => reply([text('?')], 'stop_sequence'), 400],
+  ])('leaves exactly the actual cost in the window after %s', async (_name, next, cost) => {
+    script = next;
+    await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));
+    expect(await spent('anthropic:usd')).toBe(cost);
+  });
+
+  it('leaves exactly the actual cost in the window when the client disconnects mid-run', async () => {
+    let open!: () => void;
+    gate = new Promise((resolve) => (open = resolve));
+    const response = await handleAsk(askRequest({ question: 'How long to cancel?' }), deps());
+    expect(await spent('anthropic:usd')).toBe(100_000);
+    await response.body?.cancel();
+    open();
+    await vi.waitFor(async () => expect(await spent('anthropic:usd')).toBe(400));
+    expect(modelCalls).toHaveLength(1);
+  });
+
+  it("answers 400 for a document id outside the session, another session's upload included, and reserves no budget", async () => {
     const other = await ingestUpload(fixture.db, fakeEmbedder, 'sess2', 'theirs.txt', new TextEncoder().encode('Private notes.'));
     for (const documentIds of [[other.id], ['00000000-0000-0000-0000-000000000000'], [fixture.ids['cancel.md'], other.id]]) {
       const response = await handleAsk(askRequest({ question: 'Hello?', documentIds }), deps());
       expect(response.status).toBe(400);
     }
     expect(modelCalls).toHaveLength(0);
+    expect(await spent('anthropic:usd')).toBe(0);
   });
 
   it('searches only the selected documents', async () => {

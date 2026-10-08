@@ -4,12 +4,14 @@ import { pgliteDb, type Db } from './db';
 import {
   addCost,
   addEmbedTokens,
-  assertBudget,
   assertEmbedBudget,
   clientKey,
   deleteExpiredWindows,
   EMBED_TOKENS_PER_DAY,
   LimitError,
+  releaseBudget,
+  RESERVE_MICRO_USD,
+  reserveBudget,
   reserveQuestion,
   reserveUpload,
   windowStart,
@@ -81,22 +83,50 @@ describe('reserveUpload', () => {
   });
 });
 
-describe('assertBudget', () => {
-  it('refuses a new question once today\'s cost reaches the budget, in micro-dollars', async () => {
-    await assertBudget(db, 1, now);
+const windowTotal = async (bucket: string) => (await db.query<{ count: number }>('select count::float8 as count from usage_windows where bucket = $1', [bucket]))[0]?.count ?? 0;
+
+describe('reserveBudget and releaseBudget', () => {
+  it('holds $0.10 per question and refuses once the held total would pass the budget, in micro-dollars', async () => {
     await addCost(db, 0.4, now);
     await addCost(db, 0.35, now);
-    await assertBudget(db, 1, now);
-    await addCost(db, 0.25, now);
-    const error = await limited(() => assertBudget(db, 1, now));
+    await reserveBudget(db, 1, now);
+    await reserveBudget(db, 1, now);
+    expect(await windowTotal('anthropic:usd')).toBe(750_000 + 2 * RESERVE_MICRO_USD);
+    const error = await limited(() => reserveBudget(db, 1, now));
+    expect(await windowTotal('anthropic:usd')).toBe(750_000 + 2 * RESERVE_MICRO_USD);
     expect(error.message).toContain('$1.00');
     expect(error.resetsAt.toISOString()).toBe('2026-10-08T00:00:00.000Z');
-    await assertBudget(db, 1, new Date('2026-10-08T00:00:01Z'));
+    await reserveBudget(db, 1, new Date('2026-10-08T00:00:01Z'));
+  });
+
+  it('takes the $0.10 back when it refuses, and leaves the window as it was', async () => {
+    await addCost(db, 0.95, now);
+    await limited(() => reserveBudget(db, 1, now));
+    expect(await windowTotal('anthropic:usd')).toBe(950_000);
+  });
+
+  it('refuses when the spend alone has reached the budget', async () => {
+    await addCost(db, 1, now);
+    await limited(() => reserveBudget(db, 1, now));
+    expect(await windowTotal('anthropic:usd')).toBe(1_000_000);
+  });
+
+  it('releases the hold in the window it was made in, even after midnight', async () => {
+    await reserveBudget(db, 1, now);
+    await releaseBudget(db, now);
+    expect(await windowTotal('anthropic:usd')).toBe(0);
+    await reserveBudget(db, 1, new Date('2026-10-07T23:59:59Z'));
+    await addCost(db, 0.02, new Date('2026-10-08T00:00:01Z'));
+    await releaseBudget(db, new Date('2026-10-07T23:59:59Z'));
+    expect(await db.query(`select to_char(window_start at time zone 'UTC', 'YYYY-MM-DD') as day, count::float8 as count from usage_windows order by window_start`)).toEqual([
+      { day: '2026-10-07', count: 0 },
+      { day: '2026-10-08', count: 20_000 },
+    ]);
   });
 
   it('stores the cost rounded to whole micro-dollars', async () => {
     await addCost(db, 0.1234567, now);
-    expect(await db.query('select count::float8 as count from usage_windows where bucket = $1', ['anthropic:usd'])).toEqual([{ count: 123457 }]);
+    expect(await windowTotal('anthropic:usd')).toBe(123457);
   });
 });
 
@@ -107,6 +137,16 @@ describe('assertEmbedBudget', () => {
     await addEmbedTokens(db, 1, now);
     const error = await limited(() => assertEmbedBudget(db, now));
     expect(error.message).toContain('2,000,000 tokens a day');
+  });
+
+  it('refuses an estimate that would pass 2M, with the reset time, and allows one that lands exactly on it', async () => {
+    await addEmbedTokens(db, EMBED_TOKENS_PER_DAY - 1000, now);
+    await assertEmbedBudget(db, now, 1000);
+    const error = await limited(() => assertEmbedBudget(db, now, 1001));
+    expect(error.message).toContain('this upload needs about 1,001 tokens');
+    expect(error.message).toContain('1,999,000 of the 2,000,000 a day are used');
+    expect(error.message).toContain('2026-10-08 00:00 UTC');
+    expect(error.resetsAt.toISOString()).toBe('2026-10-08T00:00:00.000Z');
   });
 });
 

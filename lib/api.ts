@@ -4,7 +4,7 @@ import { runAgent, type AgentEvent, type ModelCall } from './agent/loop';
 import type { Db } from './db';
 import { deleteExpiredUploads, deleteUpload, listDocuments } from './documents';
 import type { Embedder } from './embed';
-import { addCost, addEmbedTokens, assertBudget, assertEmbedBudget, clientKey, deleteExpiredWindows, LimitError, reserveQuestion, reserveUpload } from './limits';
+import { addCost, addEmbedTokens, assertEmbedBudget, clientKey, deleteExpiredWindows, LimitError, releaseBudget, reserveBudget, reserveQuestion, reserveUpload } from './limits';
 import { costUsd, type PricedModel } from './pricing';
 import { ingestUpload, MAX_UPLOAD_BYTES, UploadError } from './upload';
 
@@ -45,13 +45,14 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
     const parsed = askBody.safeParse(await request.json().catch(() => null));
     if (!parsed.success) return Response.json({ error: 'Send { "question": 1 to 500 characters, "documentIds": optional list of document ids }.' }, { status: 400 });
     const { question, documentIds } = parsed.data;
+    await reserveQuestion(deps.db, clientKey(request.headers, deps.ipSecret), deps.now());
     const sessionId = await deps.sessionId({ create: true });
     const documents = await listDocuments(deps.db, sessionId);
     const allowed = new Set(documents.map(({ id }) => id));
     if (documentIds?.some((id) => !allowed.has(id))) return Response.json({ error: 'A selected document is not available to this session.' }, { status: 400 });
 
-    await reserveQuestion(deps.db, clientKey(request.headers, deps.ipSecret), deps.now());
-    await assertBudget(deps.db, deps.budgetUsd, deps.now());
+    const reservedAt = deps.now();
+    await reserveBudget(deps.db, deps.budgetUsd, reservedAt);
 
     const sourceUrls = new Map(documents.flatMap(({ id, sourceUrl }) => (sourceUrl ? [[id, sourceUrl] as const] : [])));
     const started = performance.now();
@@ -87,29 +88,33 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
             if (event.embedTokens) recording = recording.then(() => addEmbedTokens(deps.db, event.embedTokens ?? 0, deps.now()));
           };
           try {
-            await runAgent(
-              {
-                model: deps.model.call,
-                modelId: deps.model.id,
-                db: deps.db,
-                embed: async (texts, inputType) => {
-                  await assertEmbedBudget(deps.db, deps.now());
-                  return deps.queryEmbedder(texts, inputType);
+            try {
+              await runAgent(
+                {
+                  model: deps.model.call,
+                  modelId: deps.model.id,
+                  db: deps.db,
+                  embed: async (texts, inputType) => {
+                    await assertEmbedBudget(deps.db, deps.now());
+                    return deps.queryEmbedder(texts, inputType);
+                  },
+                  scope: documentIds ?? [...allowed],
+                  sourceUrlOf: (documentId) => sourceUrls.get(documentId) ?? null,
                 },
-                scope: documentIds ?? [...allowed],
-                sourceUrlOf: (documentId) => sourceUrls.get(documentId) ?? null,
-              },
-              question,
-              (event) => {
-                if (event.type === 'usage') return record(event);
-                if (event.type === 'step' && event.fallback) console.warn(`${event.tool} fell back to keyword search: ${event.fallbackReason}`);
-                write(event);
-              },
-            );
-            await recording;
-          } catch (error) {
-            write({ type: 'error', message: error instanceof Error ? error.message : String(error), excerpts: [] });
-            await recording;
+                question,
+                (event) => {
+                  if (event.type === 'usage') return record(event);
+                  if (event.type === 'step' && event.fallback) console.warn(`${event.tool} fell back to keyword search: ${event.fallbackReason}`);
+                  write(event);
+                },
+              );
+              await recording;
+            } catch (error) {
+              write({ type: 'error', message: error instanceof Error ? error.message : String(error), excerpts: [] });
+              await recording;
+            }
+          } finally {
+            await releaseBudget(deps.db, reservedAt);
           }
           write({ type: 'done', model: deps.model.id, ...totals, costUsd: cost, latencyMs: Math.round(performance.now() - started) });
           if (!closed) controller.close();
