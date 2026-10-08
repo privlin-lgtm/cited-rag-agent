@@ -37,6 +37,32 @@ describe('ingestDocument', () => {
     ]);
   });
 
+  it('passes beforeEmbed the estimated tokens of all chunks before embedding, and embeds nothing when it throws', async () => {
+    let estimate = 0;
+    await ingestDocument(db, counting, {
+      ...input(),
+      beforeEmbed: async (tokens) => {
+        expect(calls).toBe(0);
+        estimate = tokens;
+      },
+    });
+    const stored = await db.query<{ content: string }>('select content from chunks');
+    expect(estimate).toBe(stored.reduce((sum, { content }) => sum + Math.ceil(content.length / 4), 0));
+    expect(calls).toBe(1);
+
+    calls = 0;
+    await expect(
+      ingestDocument(db, counting, {
+        ...input('# Other\nDifferent text.'),
+        beforeEmbed: async () => {
+          throw new Error('too big');
+        },
+      }),
+    ).rejects.toThrow('too big');
+    expect(calls).toBe(0);
+    expect(await db.query('select count(*)::int as n from chunks')).toEqual([{ n: 2 }]);
+  });
+
   it('numbers chunks 0..n-1 across insert batches', async () => {
     const paragraphs = Array.from({ length: 130 }, (_, i) => `Paragraph ${i}. ${'word '.repeat(340).trim()}`).join('\n\n');
     const report = await ingestDocument(db, counting, { collection: 'corpus', filename: 'long.txt', kind: 'txt', data: bytes(paragraphs) });

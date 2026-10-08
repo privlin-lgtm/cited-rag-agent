@@ -128,6 +128,31 @@ describe('createEmbedder', () => {
     await expect(createEmbedder({ apiKey: 'k', fetchImpl: wrongCount })(['a', 'b'], 'document')).rejects.toThrow('1 embeddings for 2 texts');
   });
 
+  it('reports each batch to onBatch with its own usage as the response arrives', async () => {
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => ok(JSON.parse(init?.body as string).input));
+    const onBatch = vi.fn<(tokens: number) => Promise<void>>(async () => {});
+    await createEmbedder({ apiKey: 'k', fetchImpl })(
+      Array.from({ length: 300 }, (_, i) => `text ${i}`),
+      'document',
+      onBatch,
+    );
+    expect(onBatch.mock.calls).toEqual([[1280], [1280], [440]]);
+  });
+
+  it('has already reported the batches that came back when a later batch fails', async () => {
+    let requests = 0;
+    const fetchImpl = vi.fn(async (_url: unknown, init?: RequestInit) => (++requests === 2 ? new Response('boom', { status: 500 }) : ok(JSON.parse(init?.body as string).input)));
+    const onBatch = vi.fn<(tokens: number) => Promise<void>>(async () => {});
+    await expect(
+      createEmbedder({ apiKey: 'k', fetchImpl })(
+        Array.from({ length: 300 }, (_, i) => `text ${i}`),
+        'document',
+        onBatch,
+      ),
+    ).rejects.toThrow('HTTP 500: boom');
+    expect(onBatch.mock.calls).toEqual([[1280]]);
+  });
+
   it('makes no request for no texts', async () => {
     const fetchImpl = vi.fn();
     expect(await createEmbedder({ apiKey: 'k', fetchImpl })([], 'document')).toEqual({ embeddings: [], tokens: 0 });

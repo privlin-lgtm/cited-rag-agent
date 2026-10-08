@@ -7,7 +7,7 @@ const MAX_RETRIES = 6;
 const MAX_BACKOFF_MS = 30_000;
 
 export type InputType = 'document' | 'query';
-export type Embedder = (texts: string[], inputType: InputType) => Promise<{ embeddings: number[][]; tokens: number }>;
+export type Embedder = (texts: string[], inputType: InputType, onBatch?: (tokens: number) => Promise<void>) => Promise<{ embeddings: number[][]; tokens: number }>;
 
 const response = z.object({
   data: z.array(z.object({ index: z.number(), embedding: z.array(z.number()).length(EMBEDDING_DIMENSIONS) })),
@@ -75,11 +75,12 @@ export const createEmbedder = ({
     }
   };
 
-  return async (texts, inputType) => {
+  return async (texts, inputType, onBatch) => {
     const embeddings: number[][] = [];
     let tokens = 0;
     for (const batch of batches(texts)) {
       const result = await post(batch, inputType);
+      await onBatch?.(result.tokens);
       embeddings.push(...result.embeddings);
       tokens += result.tokens;
     }

@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ModelCall, ModelParams } from './agent/loop';
 import { setup, type Fixture } from './agent/test-setup';
 import { handleAsk, handleCleanup, handleDelete, handleDocuments, handleUpload, type ApiDeps } from './api';
+import type { Embedder } from './embed';
 import { fakeEmbedder } from './fake-embedder';
 import { addCost, addEmbedTokens, clientKey, EMBED_TOKENS_PER_DAY, reserveQuestion, reserveUpload } from './limits';
 import { makePdf } from './test-pdf';
@@ -208,6 +209,19 @@ describe('POST /api/ask', () => {
     expect(listing).not.toContain(other.id);
   });
 
+  it('debits the query embedding tokens that came back even when the search then falls back to keywords', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const failing: Embedder = async (_texts, _inputType, onBatch) => {
+      await onBatch?.(7);
+      throw new Error('Voyage failed after billing');
+    };
+    script = (calls) =>
+      calls.length === 1 ? reply([toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer' })], 'tool_use') : reply([text('Done.')], 'end_turn');
+    const lines = await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps({ queryEmbedder: failing })));
+    expect(lines.find(({ type }) => type === 'step')).toMatchObject({ fallback: 'keyword' });
+    expect(await spent('embed:tokens')).toBe(7);
+  });
+
   it('uses the keyword fallback for every search once the embedding budget is spent, and logs why', async () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     await addEmbedTokens(fixture.db, EMBED_TOKENS_PER_DAY, NOW);
@@ -235,6 +249,35 @@ describe('POST /api/upload', () => {
     expect(await fixture.db.query("select content from chunks c join documents d on d.id = c.document_id where d.collection = 'upload:sess1'")).toEqual([
       { content: '# Refunds\nRefunds arrive within 30 days.' },
     ]);
+  });
+
+  it('refuses a text file of about 500 KB with a 413 that names the cap, before Voyage is called', async () => {
+    const embedder = vi.fn(fakeEmbedder);
+    const response = await handleUpload(uploadRequest('big.txt', 'Refunds arrive within twelve days.\n\n'.repeat(14_000)), deps({ documentEmbedder: embedder }));
+    expect(response.status).toBe(413);
+    expect((await response.json()).error).toMatch(/about 1\d\d,\d{3} tokens.*the limit is 100,000 tokens/);
+    expect(embedder).not.toHaveBeenCalled();
+    expect(await spent('embed:tokens')).toBe(0);
+    expect(await fixture.db.query("select 1 from documents where collection like 'upload:%'")).toEqual([]);
+  });
+
+  it('refuses an upload whose estimate would pass the daily embedding budget, with the reset time, before Voyage is called', async () => {
+    await addEmbedTokens(fixture.db, EMBED_TOKENS_PER_DAY - 20, NOW);
+    const embedder = vi.fn(fakeEmbedder);
+    const response = await handleUpload(uploadRequest('notes.md', `# A\n${'Refunds arrive within twelve days of the request. '.repeat(4)}`), deps({ documentEmbedder: embedder }));
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining('this upload needs about'), resetsAt: '2026-10-08T00:00:00.000Z' });
+    expect(embedder).not.toHaveBeenCalled();
+    expect(await spent('embed:tokens')).toBe(EMBED_TOKENS_PER_DAY - 20);
+  });
+
+  it('has already debited the batch that came back when the ingest fails afterwards', async () => {
+    const failing: Embedder = async (_texts, _inputType, onBatch) => {
+      await onBatch?.(120);
+      throw new Error('Voyage failed on the second batch');
+    };
+    await expect(handleUpload(uploadRequest('notes.md', '# A\nText.'), deps({ documentEmbedder: failing }))).rejects.toThrow('Voyage failed on the second batch');
+    expect(await spent('embed:tokens')).toBe(120);
   });
 
   it('refuses the 11th upload in a day with a 429', async () => {

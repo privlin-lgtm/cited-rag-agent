@@ -1,13 +1,13 @@
 import { createHash } from 'node:crypto';
 import type { Db } from '../db';
 import type { Embedder } from '../embed';
-import { chunkParts } from './chunk';
+import { chunkParts, estimateTokens } from './chunk';
 import { extract, type Kind } from './extract';
 
 export const INGEST_VERSION = 2;
 const INSERT_BATCH = 100;
 
-export type IngestInput = { collection: string; filename: string; kind: Kind; data: Uint8Array };
+export type IngestInput = { collection: string; filename: string; kind: Kind; data: Uint8Array; beforeEmbed?: (estimatedTokens: number) => Promise<void> };
 export type IngestReport =
   | { status: 'skipped'; chunks: number }
   | { status: 'ingested'; pages: number | null; chunks: number; tokens: number };
@@ -15,7 +15,7 @@ export type IngestReport =
 export const ingestDocument = async (
   db: Db,
   embed: Embedder,
-  { collection, filename, kind, data }: IngestInput,
+  { collection, filename, kind, data, beforeEmbed }: IngestInput,
   version = INGEST_VERSION,
 ): Promise<IngestReport> => {
   const sha256 = createHash('sha256').update(data).digest('hex');
@@ -29,6 +29,7 @@ export const ingestDocument = async (
   const { pages, parts } = await extract(kind, data);
   const chunks = chunkParts(parts);
   if (!chunks.length) throw new Error(`${filename} has no extractable text`);
+  await beforeEmbed?.(chunks.reduce((sum, { content }) => sum + estimateTokens(content), 0));
   const { embeddings, tokens } = await embed(
     chunks.map(({ content }) => content),
     'document',

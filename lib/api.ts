@@ -37,6 +37,11 @@ const guard = async (deps: ApiDeps, run: () => Promise<Response>) => {
   }
 };
 
+const debited =
+  (embedder: Embedder, { db, now }: ApiDeps): Embedder =>
+  (texts, inputType) =>
+    embedder(texts, inputType, (tokens) => addEmbedTokens(db, tokens, now()));
+
 const ndjson = (events: ReadableStream<Uint8Array>) =>
   new Response(events, { headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' } });
 
@@ -71,22 +76,19 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
           const totals = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
           let cost = 0;
           let recording: Promise<unknown> = Promise.resolve();
-          const record = (event: Extract<AgentEvent, { type: 'usage' }>) => {
-            const usage = event.anthropic;
-            if (usage) {
-              const counts = {
-                inputTokens: usage.input_tokens,
-                outputTokens: usage.output_tokens,
-                cacheReadTokens: usage.cache_read_input_tokens ?? 0,
-                cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
-              };
-              const usd = costUsd(deps.model.id, counts);
-              cost += usd;
-              for (const key of Object.keys(totals) as (keyof typeof totals)[]) totals[key] += counts[key];
-              recording = recording.then(() => addCost(deps.db, usd, deps.now()));
-            }
-            if (event.embedTokens) recording = recording.then(() => addEmbedTokens(deps.db, event.embedTokens ?? 0, deps.now()));
+          const record = ({ anthropic: usage }: Extract<AgentEvent, { type: 'usage' }>) => {
+            const counts = {
+              inputTokens: usage.input_tokens,
+              outputTokens: usage.output_tokens,
+              cacheReadTokens: usage.cache_read_input_tokens ?? 0,
+              cacheWriteTokens: usage.cache_creation_input_tokens ?? 0,
+            };
+            const usd = costUsd(deps.model.id, counts);
+            cost += usd;
+            for (const key of Object.keys(totals) as (keyof typeof totals)[]) totals[key] += counts[key];
+            recording = recording.then(() => addCost(deps.db, usd, deps.now()));
           };
+          const queryEmbed = debited(deps.queryEmbedder, deps);
           try {
             try {
               await runAgent(
@@ -96,7 +98,7 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
                   db: deps.db,
                   embed: async (texts, inputType) => {
                     await assertEmbedBudget(deps.db, deps.now());
-                    return deps.queryEmbedder(texts, inputType);
+                    return queryEmbed(texts, inputType);
                   },
                   scope: documentIds ?? [...allowed],
                   sourceUrlOf: (documentId) => sourceUrls.get(documentId) ?? null,
@@ -131,8 +133,9 @@ export const handleUpload = (request: Request, deps: ApiDeps) =>
     const sessionId = (await deps.sessionId({ create: true })) ?? '';
     await reserveUpload(deps.db, clientKey(request.headers, deps.ipSecret), deps.now());
     await assertEmbedBudget(deps.db, deps.now());
-    const result = await ingestUpload(deps.db, deps.documentEmbedder, sessionId, file.name, new Uint8Array(await file.arrayBuffer()));
-    if (result.report.status === 'ingested') await addEmbedTokens(deps.db, result.report.tokens, deps.now());
+    const result = await ingestUpload(deps.db, debited(deps.documentEmbedder, deps), sessionId, file.name, new Uint8Array(await file.arrayBuffer()), (estimatedTokens) =>
+      assertEmbedBudget(deps.db, deps.now(), estimatedTokens),
+    );
     const document = (await listDocuments(deps.db, sessionId)).find(({ id }) => id === result.id);
     return Response.json({ document });
   });
