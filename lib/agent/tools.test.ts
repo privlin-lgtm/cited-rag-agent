@@ -41,7 +41,6 @@ describe('search tools', () => {
     expect(run.entries).toHaveLength(run.content.length);
     expect(run.entries[0]).toMatchObject({ file: 'cancel.md', locator: '§ Cancellation', documentId: fixture.ids['cancel.md'] });
     expect(run.hits[0]).toMatchObject({ file: 'cancel.md', locator: '§ Cancellation' });
-    expect(run.embedTokens).toBeGreaterThan(0);
   });
 
   it('answer an empty result with plain text and no entries', async () => {
@@ -63,7 +62,6 @@ describe('search tools', () => {
     const run = await runTool(context(fixture.all, failing), 'search_documents', { query: 'how long to cancel a remittance transfer?' });
     expect(run.fallback).toBe('keyword');
     expect(run.fallbackReason).toBe('Voyage is down');
-    expect(run.embedTokens).toBeUndefined();
     expect(run.hits.length).toBeGreaterThan(0);
     expect(run.hits[0].file).toBe('cancel.md');
   });

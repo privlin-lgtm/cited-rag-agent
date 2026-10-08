@@ -1,8 +1,9 @@
 import type { Message, StopReason } from '@anthropic-ai/sdk/resources/messages';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { ModelCall, ModelParams } from './agent/loop';
 import { setup, type Fixture } from './agent/test-setup';
 import { handleAsk, handleCleanup, handleDelete, handleDocuments, handleUpload, type ApiDeps } from './api';
+import type { Embedder } from './embed';
 import { fakeEmbedder } from './fake-embedder';
 import { addCost, addEmbedTokens, clientKey, EMBED_TOKENS_PER_DAY, reserveQuestion, reserveUpload } from './limits';
 import { makePdf } from './test-pdf';
@@ -13,6 +14,8 @@ const IP = '203.0.113.9';
 let fixture: Fixture;
 let modelCalls: ModelParams[];
 let script: (calls: ModelParams[]) => Message | Error;
+let gate: Promise<void>;
+let info: MockInstance<Console['info']>;
 
 const usage = { input_tokens: 100, output_tokens: 20, cache_creation_input_tokens: null, cache_read_input_tokens: null };
 const reply = (content: unknown[], stopReason: StopReason) =>
@@ -31,6 +34,7 @@ const cite = (index: number, start: number) => ({
 
 const model: ModelCall = async (params, onText) => {
   modelCalls.push(structuredClone(params));
+  await gate;
   const next = script(modelCalls);
   if (next instanceof Error) throw next;
   for (const block of next.content) if (block.type === 'text') onText(block.text);
@@ -50,8 +54,12 @@ const deps = (overrides: Partial<ApiDeps> = {}, session: string | null = 'sess1'
   ...overrides,
 });
 
-const askRequest = (body: unknown) =>
-  new Request('http://test/api/ask', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': IP }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+const askRequest = (body: unknown, address = IP, headers: Record<string, string> = {}) =>
+  new Request('http://test/api/ask', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': address, ...headers },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
 
 type Line = { type: string; results?: unknown; costUsd: number; latencyMs: number; hits: { file: string }[] };
 const events = async (response: Response) =>
@@ -60,18 +68,26 @@ const events = async (response: Response) =>
     .split('\n')
     .map((line) => JSON.parse(line) as Line);
 
-const uploadRequest = (name: string, data: Uint8Array | string, field = 'file') => {
+const uploadRequest = (name: string, data: Uint8Array | string, field = 'file', headers: Record<string, string> = {}) => {
   const form = new FormData();
   form.set(field, new File([data as BlobPart], name));
-  return new Request('http://test/api/upload', { method: 'POST', headers: { 'x-forwarded-for': IP }, body: form });
+  return new Request('http://test/api/upload', { method: 'POST', headers: { 'x-forwarded-for': IP, ...headers }, body: form });
 };
+
+const deleteRequest = (headers: Record<string, string> = {}) => new Request('http://test/api/documents/id', { method: 'DELETE', headers });
 
 const spent = async (bucket: string) => (await fixture.db.query<{ count: number }>('select count::float8 as count from usage_windows where bucket = $1', [bucket]))[0]?.count ?? 0;
 
 beforeEach(async () => {
   fixture = await setup();
   modelCalls = [];
+  gate = Promise.resolve();
+  info = vi.spyOn(console, 'info').mockImplementation(() => {});
   script = () => reply([text('Nothing to cite.')], 'end_turn');
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('POST /api/ask', () => {
@@ -82,10 +98,11 @@ describe('POST /api/ask', () => {
     ['a question that is not text', { question: 5 }],
     ['an empty document list', { question: 'ok', documentIds: [] }],
     ['a body that is not JSON', 'not json'],
-  ])('answers %s with 400 and calls no model', async (_name, body) => {
+  ])('answers %s with 400, calls no model and reserves nothing', async (_name, body) => {
     const response = await handleAsk(askRequest(body), deps());
     expect(response.status).toBe(400);
     expect(modelCalls).toHaveLength(0);
+    expect(await fixture.db.query('select bucket from usage_windows')).toEqual([]);
   });
 
   it('streams step, answer, citations and done events, and records cost and embedding tokens', async () => {
@@ -130,15 +147,62 @@ describe('POST /api/ask', () => {
     expect(response.status).toBe(429);
     expect(await response.json()).toMatchObject({ error: expect.stringContaining('Daily cost budget reached'), resetsAt: '2026-10-08T00:00:00.000Z' });
     expect(modelCalls).toHaveLength(0);
+    expect(await spent('anthropic:usd')).toBe(1_000_000);
   });
 
-  it("answers 400 for a document id outside the session, another session's upload included", async () => {
+  it('refuses a question with $0.95 spent, before any model call, and leaves the window at $0.95', async () => {
+    await addCost(fixture.db, 0.95, NOW);
+    const response = await handleAsk(askRequest({ question: 'Anything?' }), deps());
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining('Daily cost budget reached'), resetsAt: '2026-10-08T00:00:00.000Z' });
+    expect(modelCalls).toHaveLength(0);
+    expect(await spent('anthropic:usd')).toBe(950_000);
+  });
+
+  it('starts exactly one of ten simultaneous questions from ten addresses when $0.85 is spent', async () => {
+    await addCost(fixture.db, 0.85, NOW);
+    let open!: () => void;
+    gate = new Promise((resolve) => (open = resolve));
+    const responses = await Promise.all(Array.from({ length: 10 }, (_, i) => handleAsk(askRequest({ question: 'How long to cancel?' }, `203.0.113.${i + 10}`), deps())));
+    expect(responses.map(({ status }) => status).sort()).toEqual([200, 429, 429, 429, 429, 429, 429, 429, 429, 429]);
+    expect(await spent('anthropic:usd')).toBe(950_000);
+    open();
+    await events(responses.find(({ status }) => status === 200) as Response);
+    expect(modelCalls).toHaveLength(1);
+    expect(await spent('anthropic:usd')).toBe(850_000 + 400);
+  });
+
+  it.each([
+    ['a completed run', () => reply([text('Done.')], 'end_turn'), 400],
+    ['a cut-off run', () => reply([text('Partial')], 'max_tokens'), 400],
+    ['a run Claude declined', () => reply([], 'refusal'), 400],
+    ['a model error', () => new Error('Overloaded'), 0],
+    ['a thrown error', () => reply([text('?')], 'stop_sequence'), 400],
+  ])('leaves exactly the actual cost in the window after %s', async (_name, next, cost) => {
+    script = next;
+    await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));
+    expect(await spent('anthropic:usd')).toBe(cost);
+  });
+
+  it('leaves exactly the actual cost in the window when the client disconnects mid-run', async () => {
+    let open!: () => void;
+    gate = new Promise((resolve) => (open = resolve));
+    const response = await handleAsk(askRequest({ question: 'How long to cancel?' }), deps());
+    expect(await spent('anthropic:usd')).toBe(100_000);
+    await response.body?.cancel();
+    open();
+    await vi.waitFor(async () => expect(await spent('anthropic:usd')).toBe(400));
+    expect(modelCalls).toHaveLength(1);
+  });
+
+  it("answers 400 for a document id outside the session, another session's upload included, and reserves no budget", async () => {
     const other = await ingestUpload(fixture.db, fakeEmbedder, 'sess2', 'theirs.txt', new TextEncoder().encode('Private notes.'));
     for (const documentIds of [[other.id], ['00000000-0000-0000-0000-000000000000'], [fixture.ids['cancel.md'], other.id]]) {
       const response = await handleAsk(askRequest({ question: 'Hello?', documentIds }), deps());
       expect(response.status).toBe(400);
     }
     expect(modelCalls).toHaveLength(0);
+    expect(await spent('anthropic:usd')).toBe(0);
   });
 
   it('searches only the selected documents', async () => {
@@ -155,6 +219,19 @@ describe('POST /api/ask', () => {
     const listing = JSON.stringify(modelCalls[1].messages);
     expect(listing).toContain(fixture.ids['cancel.md']);
     expect(listing).not.toContain(other.id);
+  });
+
+  it('debits the query embedding tokens that came back even when the search then falls back to keywords', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const failing: Embedder = async (_texts, _inputType, onBatch) => {
+      await onBatch?.(7);
+      throw new Error('Voyage failed after billing');
+    };
+    script = (calls) =>
+      calls.length === 1 ? reply([toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer' })], 'tool_use') : reply([text('Done.')], 'end_turn');
+    const lines = await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps({ queryEmbedder: failing })));
+    expect(lines.find(({ type }) => type === 'step')).toMatchObject({ fallback: 'keyword' });
+    expect(await spent('embed:tokens')).toBe(7);
   });
 
   it('uses the keyword fallback for every search once the embedding budget is spent, and logs why', async () => {
@@ -184,6 +261,35 @@ describe('POST /api/upload', () => {
     expect(await fixture.db.query("select content from chunks c join documents d on d.id = c.document_id where d.collection = 'upload:sess1'")).toEqual([
       { content: '# Refunds\nRefunds arrive within 30 days.' },
     ]);
+  });
+
+  it('refuses a text file of about 500 KB with a 413 that names the cap, before Voyage is called', async () => {
+    const embedder = vi.fn(fakeEmbedder);
+    const response = await handleUpload(uploadRequest('big.txt', 'Refunds arrive within twelve days.\n\n'.repeat(14_000)), deps({ documentEmbedder: embedder }));
+    expect(response.status).toBe(413);
+    expect((await response.json()).error).toMatch(/about 1\d\d,\d{3} tokens.*the limit is 100,000 tokens/);
+    expect(embedder).not.toHaveBeenCalled();
+    expect(await spent('embed:tokens')).toBe(0);
+    expect(await fixture.db.query("select 1 from documents where collection like 'upload:%'")).toEqual([]);
+  });
+
+  it('refuses an upload whose estimate would pass the daily embedding budget, with the reset time, before Voyage is called', async () => {
+    await addEmbedTokens(fixture.db, EMBED_TOKENS_PER_DAY - 20, NOW);
+    const embedder = vi.fn(fakeEmbedder);
+    const response = await handleUpload(uploadRequest('notes.md', `# A\n${'Refunds arrive within twelve days of the request. '.repeat(4)}`), deps({ documentEmbedder: embedder }));
+    expect(response.status).toBe(429);
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining('this upload needs about'), resetsAt: '2026-10-08T00:00:00.000Z' });
+    expect(embedder).not.toHaveBeenCalled();
+    expect(await spent('embed:tokens')).toBe(EMBED_TOKENS_PER_DAY - 20);
+  });
+
+  it('has already debited the batch that came back when the ingest fails afterwards', async () => {
+    const failing: Embedder = async (_texts, _inputType, onBatch) => {
+      await onBatch?.(120);
+      throw new Error('Voyage failed on the second batch');
+    };
+    await expect(handleUpload(uploadRequest('notes.md', '# A\nText.'), deps({ documentEmbedder: failing }))).rejects.toThrow('Voyage failed on the second batch');
+    expect(await spent('embed:tokens')).toBe(120);
   });
 
   it('refuses the 11th upload in a day with a 429', async () => {
@@ -233,17 +339,129 @@ describe('GET /api/documents and DELETE /api/documents/:id', () => {
   it("deletes the session's own upload, and nothing else", async () => {
     const mine = await ingestUpload(fixture.db, fakeEmbedder, 'sess1', 'mine.txt', new TextEncoder().encode('Mine.'));
     const theirs = await ingestUpload(fixture.db, fakeEmbedder, 'sess2', 'theirs.txt', new TextEncoder().encode('Theirs.'));
-    expect((await handleDelete(theirs.id, deps())).status).toBe(404);
-    expect((await handleDelete(fixture.ids['cancel.md'], deps())).status).toBe(404);
-    expect((await handleDelete('not-a-uuid', deps())).status).toBe(400);
-    expect((await handleDelete(mine.id, deps())).status).toBe(204);
-    expect((await handleDelete(mine.id, deps())).status).toBe(404);
+    expect((await handleDelete(deleteRequest(), theirs.id, deps())).status).toBe(404);
+    expect((await handleDelete(deleteRequest(), fixture.ids['cancel.md'], deps())).status).toBe(404);
+    expect((await handleDelete(deleteRequest(), 'not-a-uuid', deps())).status).toBe(400);
+    expect((await handleDelete(deleteRequest(), mine.id, deps())).status).toBe(204);
+    expect((await handleDelete(deleteRequest(), mine.id, deps())).status).toBe(404);
     expect(await fixture.db.query('select count(*)::int as n from documents')).toEqual([{ n: 5 }]);
   });
 
   it('answers 404 when the request has no session', async () => {
     const mine = await ingestUpload(fixture.db, fakeEmbedder, 'sess1', 'mine.txt', new TextEncoder().encode('Mine.'));
-    expect((await handleDelete(mine.id, deps({}, null))).status).toBe(404);
+    expect((await handleDelete(deleteRequest(), mine.id, deps({}, null))).status).toBe(404);
+  });
+});
+
+describe('the server log line', () => {
+  const logged = () => info.mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
+
+  it('writes exactly one JSON line per completed run, with counts, tokens, cost and latency, and nothing from the request', async () => {
+    script = (calls) =>
+      calls.length === 1
+        ? reply([text('Looking.'), toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 3 })], 'tool_use')
+        : reply([text('Cancel within 30 minutes.', [cite(0, 0)])], 'end_turn');
+    await events(await handleAsk(askRequest({ question: 'How long does the zebra wait?', documentIds: [fixture.ids['cancel.md']] }), deps()));
+    expect(info).toHaveBeenCalledOnce();
+    expect(logged()[0]).toEqual({
+      event: 'ask',
+      status: 'complete',
+      rounds: 1,
+      toolCalls: 1,
+      keywordFallbacks: 0,
+      model: 'claude-sonnet-5-5',
+      inputTokens: 200,
+      outputTokens: 40,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      costUsd: expect.closeTo(0.0008, 8),
+      latencyMs: expect.any(Number),
+    });
+    const raw = String(info.mock.calls[0][0]);
+    for (const hidden of ['zebra', 'sess1', fixture.ids['cancel.md'], clientKey(new Headers({ 'x-forwarded-for': IP }), 'ip-secret'), IP]) expect(raw).not.toContain(hidden);
+  });
+
+  it.each([
+    ['cut_off', () => reply([text('Partial')], 'max_tokens')],
+    ['declined', () => reply([], 'refusal')],
+    ['error', () => new Error('Overloaded')],
+    ['error', () => reply([text('?')], 'stop_sequence')],
+  ])('writes one line with status %s', async (status, next) => {
+    script = next;
+    await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));
+    expect(info).toHaveBeenCalledOnce();
+    expect(logged()[0]).toMatchObject({ event: 'ask', status });
+  });
+
+  it('counts the keyword fallbacks and every tool call', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await addEmbedTokens(fixture.db, EMBED_TOKENS_PER_DAY, NOW);
+    script = (calls) =>
+      calls.length === 1
+        ? reply([toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer' }), toolUse('t2', 'list_documents', {})], 'tool_use')
+        : reply([text('Done.')], 'end_turn');
+    await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));
+    expect(logged()[0]).toMatchObject({ status: 'complete', rounds: 1, toolCalls: 2, keywordFallbacks: 1 });
+  });
+
+  it('writes nothing for a question that was refused before a run', async () => {
+    await handleAsk(askRequest('not json'), deps());
+    await handleAsk(askRequest({ question: 'Hi?' }, IP, { 'sec-fetch-site': 'cross-site' }), deps());
+    await addCost(fixture.db, 1, NOW);
+    expect((await handleAsk(askRequest({ question: 'Hi?' }), deps())).status).toBe(429);
+    expect(info).not.toHaveBeenCalled();
+  });
+});
+
+describe('the cross-site write guard', () => {
+  const foreign: Record<string, string>[] = [
+    { 'sec-fetch-site': 'cross-site' },
+    { 'sec-fetch-site': 'same-site' },
+    { origin: 'https://example.com' },
+    { origin: 'http://test:3000' },
+    { origin: 'null' },
+    { 'sec-fetch-site': 'same-origin', origin: 'https://example.com' },
+  ];
+  const own: Record<string, string>[] = [{},{ 'sec-fetch-site': 'same-origin' }, { 'sec-fetch-site': 'none' }, { origin: 'http://test' }, { 'sec-fetch-site': 'same-origin', origin: 'http://test' }];
+  const nothingReserved = async () => expect(await fixture.db.query('select bucket from usage_windows')).toEqual([]);
+
+  it('answers POST /api/ask with 403 before any reservation, database work or model call, and lets the site itself through', async () => {
+    for (const headers of foreign) {
+      const response = await handleAsk(askRequest({ question: 'How long to cancel?' }, IP, headers), deps({ sessionId: async () => Promise.reject(new Error('no session work')) }));
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: 'Cross-site requests are not allowed.' });
+    }
+    expect(modelCalls).toHaveLength(0);
+    await nothingReserved();
+    for (const headers of own) expect((await events(await handleAsk(askRequest({ question: 'How long to cancel?' }, IP, headers), deps()))).at(-1)?.type).toBe('done');
+  });
+
+  it('answers POST /api/upload with 403 before any reservation or embedding, and lets the site itself through', async () => {
+    const embedder = vi.fn(fakeEmbedder);
+    for (const headers of foreign) {
+      const response = await handleUpload(uploadRequest('notes.md', '# A\nText.', 'file', headers), deps({ documentEmbedder: embedder, sessionId: async () => Promise.reject(new Error('no session work')) }));
+      expect(response.status).toBe(403);
+    }
+    expect(embedder).not.toHaveBeenCalled();
+    await nothingReserved();
+    for (const headers of own) expect((await handleUpload(uploadRequest('notes.md', '# A\nText.', 'file', headers), deps())).status).toBe(200);
+  });
+
+  it('answers DELETE /api/documents/:id with 403 and keeps the upload, and lets the site itself through', async () => {
+    const mine = await ingestUpload(fixture.db, fakeEmbedder, 'sess1', 'mine.txt', new TextEncoder().encode('Mine.'));
+    for (const headers of foreign) expect((await handleDelete(deleteRequest(headers), mine.id, deps({ sessionId: async () => Promise.reject(new Error('no session work')) }))).status).toBe(403);
+    expect(await fixture.db.query("select filename from documents where collection like 'upload:%'")).toEqual([{ filename: 'mine.txt' }]);
+    for (const headers of own) {
+      const again = await ingestUpload(fixture.db, fakeEmbedder, 'sess1', 'again.txt', new TextEncoder().encode('Mine.'));
+      expect((await handleDelete(deleteRequest(headers), again.id, deps())).status).toBe(204);
+    }
+  });
+
+  it('compares the Origin with the Host header when the request has one', async () => {
+    const request = askRequest({ question: 'How long to cancel?' }, IP, { host: 'cited.example', origin: 'https://cited.example' });
+    expect((await events(await handleAsk(request, deps()))).at(-1)?.type).toBe('done');
+    const other = askRequest({ question: 'How long to cancel?' }, IP, { host: 'cited.example', origin: 'http://test' });
+    expect((await handleAsk(other, deps())).status).toBe(403);
   });
 });
 

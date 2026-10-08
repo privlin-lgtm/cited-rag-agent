@@ -96,8 +96,7 @@ describe('runAgent', () => {
     expect(new Set(sources).size).toBeGreaterThan(1);
     expect(breakpoints(calls[1])).toHaveLength(1);
     expect(breakpoints(calls[2])).toHaveLength(2);
-    expect(ofType(events, 'usage').filter(({ anthropic }) => anthropic)).toHaveLength(3);
-    expect(ofType(events, 'usage').filter(({ embedTokens }) => embedTokens)).toHaveLength(1);
+    expect(ofType(events, 'usage')).toHaveLength(3);
   });
 
   it('keeps tool results in tool_use order when the tools finish in another order', async () => {

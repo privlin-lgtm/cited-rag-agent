@@ -6,7 +6,7 @@ import { postgresDb, type Db } from '../lib/db';
 import { deleteExpiredUploads, deleteUpload, listDocuments } from '../lib/documents';
 import { fakeEmbedder, fakeVector } from '../lib/fake-embedder';
 import { ingestDocument } from '../lib/ingest';
-import { addCost, addEmbedTokens, assertBudget, assertEmbedBudget, deleteExpiredWindows, reserveQuestion, reserveUpload } from '../lib/limits';
+import { addCost, addEmbedTokens, assertEmbedBudget, deleteExpiredWindows, releaseBudget, reserveBudget, reserveQuestion, reserveUpload } from '../lib/limits';
 import { keywordSearch, semanticSearch } from '../lib/search';
 import { ingestUpload } from '../lib/upload';
 import { migrate } from './migrate';
@@ -58,14 +58,15 @@ export const steps: SmokeStep[] = [
     if (!keyword.length) throw new Error('keyword search returned no hit');
   },
   async ({ db, step }) => {
-    step('limits: reserve question and upload, add cost and embedding tokens, check budgets, clear expired windows');
+    step('limits: reserve question and upload, reserve and release budget, add cost and embedding tokens, check embedding budget, clear expired windows');
     const future = new Date('2099-01-01T12:00:00Z');
     await reserveQuestion(db, 'smoke-test', future);
     await reserveUpload(db, 'smoke-test', future);
+    await reserveBudget(db, 1, future);
     await addCost(db, 0.0001, future);
+    await releaseBudget(db, future);
     await addEmbedTokens(db, 10, future);
-    await assertBudget(db, 1, future);
-    await assertEmbedBudget(db, future);
+    await assertEmbedBudget(db, future, 10);
     if ((await deleteExpiredWindows(db, new Date('2099-01-03T00:00:00Z'))) < 1) throw new Error('expired windows were not cleared');
   },
   async ({ db, step }) => {

@@ -12,8 +12,9 @@ Times are Israel time. The build runs in Claude Code on Paul's machine, from the
 | M2 | The corpus pack committed with manifest and hashes; extractors, chunker, sentence splitter, Voyage client, versioned ingest; semantic and keyword search; the real corpus ingested into Sandbox | `m2-ingest` → `sandbox` | Wed 7 Oct, about 16:30–18:00 (it ran in the afternoon, before class) | **Start the session, approve its plan, merge** |
 | M3 | Agent loop (Fable designs it in plan mode, Sonnet builds it), NDJSON stream, citation check, three-column UI, example questions, limits and budgets, upload, cleanup cron, environment badge; deployed to the Sandbox preview | `m3-agent` → `sandbox` | Thu 8 Oct 08:30–12:30 | **Start the session, review, merge** |
 | ★ | **FIRST CUT:** M1–M3 on the Sandbox preview URL with the real corpus | | **Thu 8 Oct ~13:00** | **Walk-through 13:00–16:00 with same-day fixes; apply Thu evening** |
+| Fix | First-cut hardening and portfolio quick wins, from the walk-through and the validate review: a $0.10 budget reservation per question, a 100,000-token upload cap with per-batch embedding debits, a cross-site write guard, one server log line per run, interface fixes (status line, rendered Markdown in excerpts, labelled scores, header and footer links, favicon, Open Graph tags), the README, and an hourly Sandbox cleanup workflow | `fix/first-cut` → `sandbox` | Thu 8 Oct | **Review and merge; switch the default branch to `sandbox`; run `cleanup.yml` once by hand** |
 | M4 | Eval set (12–15 questions), `npm run eval` (hit@1/3/5, MRR), CI job with a pgvector service, job-summary table, threshold set from the first run | `m4-evals` → `sandbox` | Mon 12 Oct | **About 1.5 h of sessions plus review** |
-| M5 | Neon QA and production projects; GitHub Environments with production gated on Paul's approval; Vercel env scoping and `git.deploymentEnabled.master: false`; `pipeline.yml` (migrate, then ingest; production migrate, then deploy), plus a trigger for `/api/cron/cleanup` on Sandbox and QA, because Vercel runs cron jobs on production only; first promotion sandbox → qa → master | `m5-environments` → `sandbox`, then promotion PRs | Mon 12 – Tue 13 Oct | **About 40 min of setup, plus the approvals in each promotion** |
+| M5 | Neon QA and production projects; GitHub Environments with production gated on Paul's approval; Vercel env scoping and `git.deploymentEnabled.master: false`; `pipeline.yml` (migrate, then ingest; production migrate, then deploy), plus QA in `cleanup.yml`, the GitHub Actions trigger for `/api/cron/cleanup` that the fix PR adds for Sandbox, because Vercel runs cron jobs on production only; first promotion sandbox → qa → master | `m5-environments` → `sandbox`, then promotion PRs | Mon 12 – Tue 13 Oct | **About 40 min of setup, plus the approvals in each promotion** |
 | M6 | README (architecture, running locally, "Local secrets" with `<!-- yanshuf-secrets -->`), demo script, responsive and Lighthouse pass, Claude PR review (`/install-github-app`) | `m6-readme` → `sandbox` → promotion | Tue 13 – Wed 14 Oct | **Final walk-through Wed 14 Oct** |
 
 The full set is due Wed 14 Oct, with Thu 15 as buffer. Sunday 11 is TriviaFoundry's launch, so nothing is planned here that day.
@@ -25,11 +26,11 @@ Until the first promotion in M5, `master` holds only the chain. The first cut li
 ## Files that change
 - **Removed** (kept at tag `python-prototype`): `rag/`, `tests/`, `data/`, `docs/decisions/`, `pyproject.toml`, `pytest.ini`, `requirements.txt`, `requirements-dev.txt`, `.github/workflows/ci.yml` and `.github/dependabot.yml` (both replaced), `.env.example` (replaced). The untracked `.venv/`, `.mypy_cache/` and `.ruff_cache/` folders are deleted from disk.
 - **App:**
-  - `app/layout.tsx`, `app/page.tsx`, `components/*`
+  - `app/layout.tsx`, `app/page.tsx`, `app/icon.svg`, `components/*`
   - `app/api/{ask,upload,documents,documents/[id],health,cron/cleanup}/route.ts`
 - **Library:**
   - `lib/{env,db,embed,search,limits,pricing}.ts`
-  - `lib/{corpus,manifest,documents,session,upload,api,deps,run-state,utils}.ts`, the test helpers `lib/{fake-embedder,test-pdf}.ts` and `lib/agent/test-setup.ts`, and the upload fixture `lib/fixtures/acme-pay-terms.pdf`
+  - `lib/{corpus,manifest,documents,session,upload,api,deps,run-state,inline-markdown,utils}.ts`, the test helpers `lib/{fake-embedder,test-pdf}.ts` and `lib/agent/test-setup.ts`, and the upload fixture `lib/fixtures/acme-pay-terms.pdf`
   - `lib/ingest/{extract,chunk,index}.ts`
   - `lib/agent/{loop,tools,prompt,sentences,citations}.ts`
 - **Data:**
@@ -37,9 +38,9 @@ Until the first promotion in M5, `master` holds only the chain. The first cut li
   - `corpus/manifest.json`, `corpus/files/*` (committed), plus the Mojaloop `LICENSE.md` (the repository ships no NOTICE)
   - `evals/questions.json`
 - **Scripts:** `scripts/{migrate,corpus-fetch,ingest-corpus,retrieval-check,smoke-sql,eval}.ts`
-- **Pipelines:** `.github/workflows/{ci,evals,pipeline}.yml`, `.github/dependabot.yml`
+- **Pipelines:** `.github/workflows/{ci,cleanup,evals,pipeline}.yml`, `.github/dependabot.yml`
 - **Agent setup:** `AGENTS.md`, `CLAUDE.md`, `REVIEW.md`, `.claude/settings.json`, `.claude/hooks/{no-placeholders,production-gate}.mjs`, `.claude/agents/{verifier,architect}.md`
-- **Config and docs:** `package.json`, `package-lock.json`, `tsconfig.json`, `eslint.config.mjs`, `vitest.config.ts`, `postcss.config.mjs`, `app/globals.css`, `vercel.json`, `.env.example`, `.gitattributes`, `.gitignore`, `.worktreeinclude`, `README.md`. Scripts run through `tsx` with `--env-file-if-exists=.env.local`.
+- **Config and docs:** `package.json`, `package-lock.json`, `tsconfig.json`, `eslint.config.mjs`, `vitest.config.ts`, `postcss.config.mjs`, `app/globals.css`, `vercel.json`, `.env.example`, `.gitattributes`, `.gitignore`, `.worktreeinclude`, `README.md`, `docs/screenshot.png`. Scripts run through `tsx` with `--env-file-if-exists=.env.local`.
 
 ## Schema delta
 From nothing to the spec's four tables:
@@ -82,6 +83,9 @@ From nothing to the spec's four tables:
   - On the Sandbox preview, each of the four example questions gives at least one checked citation and none unchecked, and the steps stream live.
   - A small PDF upload is answerable, and the cleanup job removes it.
 - **First cut:** Paul's walk-through on the preview with the real corpus. Measured cost and latency per question replace the spec's estimates.
+- **Fix PR:**
+  - Tests show the budget reservation (one of ten simultaneous questions starts with $0.85 spent, and the window holds exactly the actual cost after every kind of run), the upload cap and the per-batch debit, the cross-site guard on each write route, and one log line per run.
+  - On the preview, `/api/health` reports Sandbox, a foreign `Origin` and `Sec-Fetch-Site: cross-site` get 403, a 500 KB text upload gets a 413, and the Mojaloop example shows rendered Markdown, labelled scores, the status line and a checked citation with no console error or 404.
 - **M4:**
   - The job summary shows hit@1, hit@3, hit@5 and MRR.
   - A branch that breaks retrieval on purpose fails the job.

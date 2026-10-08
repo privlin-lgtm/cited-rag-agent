@@ -55,7 +55,6 @@ export type ToolRun = {
   fallback?: 'keyword';
   fallbackReason?: string;
   error?: string;
-  embedTokens?: number;
 };
 
 const text = (value: string): TextBlockParam => ({ type: 'text', text: value });
@@ -107,7 +106,7 @@ export const runTool = async ({ db, embed, scope }: ToolContext, name: string, r
       },
     );
     return embedded
-      ? asRun(input, await semanticSearch(db, embedded.embeddings[0], { k: args.k, documentIds: ids }), { embedTokens: embedded.tokens })
+      ? asRun(input, await semanticSearch(db, embedded.embeddings[0], { k: args.k, documentIds: ids }))
       : asRun(input, await keywordSearch(db, orQuery(args.query ?? ''), { k: args.k, documentIds: ids }), { fallback: 'keyword', fallbackReason });
   }
 

@@ -1,10 +1,10 @@
 import { readFile } from 'node:fs/promises';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { migrate } from '../scripts/migrate';
 import { pgliteDb, type Db } from './db';
 import { fakeEmbedder } from './fake-embedder';
 import { makePdf } from './test-pdf';
-import { ingestUpload, MAX_UPLOAD_BYTES, prepareUpload, UploadError, uploadFilename } from './upload';
+import { ingestUpload, MAX_UPLOAD_BYTES, MAX_UPLOAD_TOKENS, prepareUpload, UploadError, uploadFilename } from './upload';
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 let db: Db;
@@ -84,6 +84,37 @@ describe('ingestUpload', () => {
     expect(rows.map(({ locator }) => locator)).toEqual(['p. 1', 'p. 2']);
     expect(rows[0].content).toContain('within 12 days of sending it');
     expect(rows[1].content).toContain('flat fee of 3.50 euro');
+  });
+
+  it.each(['big.txt', 'big.md'])('refuses %s of about 500 KB before any embedding call, naming the estimate and the cap', async (name) => {
+    const embed = vi.fn(fakeEmbedder);
+    const error = await rejection(() => ingestUpload(db, embed, 'sess1', name, bytes('Refunds arrive within twelve days.\n\n'.repeat(14_000))));
+    expect(error.status).toBe(413);
+    expect(error.message).toMatch(/^The file is about 1\d\d,\d{3} tokens \(characters \/ 4\); the limit is 100,000 tokens\.$/);
+    expect(MAX_UPLOAD_TOKENS).toBe(100_000);
+    expect(embed).not.toHaveBeenCalled();
+    expect(await db.query('select count(*)::int as n from documents')).toEqual([{ n: 0 }]);
+  });
+
+  it('accepts a file just under the token cap', async () => {
+    const embed = vi.fn(fakeEmbedder);
+    const { report } = await ingestUpload(db, embed, 'sess1', 'edge.txt', bytes('Refunds arrive within twelve days.\n\n'.repeat(10_000)));
+    expect(report.status).toBe('ingested');
+    expect(embed).toHaveBeenCalledOnce();
+  });
+
+  it('asks withinBudget about the estimate before embedding, and embeds nothing when it refuses', async () => {
+    const embed = vi.fn(fakeEmbedder);
+    const asked: number[] = [];
+    await ingestUpload(db, embed, 'sess1', 'ok.md', bytes('# A\nText that is long enough to count.'), async (tokens) => void asked.push(tokens));
+    expect(asked).toEqual([Math.ceil('# A\nText that is long enough to count.'.length / 4)]);
+    embed.mockClear();
+    await expect(
+      ingestUpload(db, embed, 'sess1', 'no.md', bytes('# B\nOther text.'), async () => {
+        throw new UploadError('over budget', 429);
+      }),
+    ).rejects.toThrow('over budget');
+    expect(embed).not.toHaveBeenCalled();
   });
 
   it('ingests a text PDF page by page', async () => {

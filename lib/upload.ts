@@ -5,6 +5,7 @@ import { extract, type Kind } from './ingest/extract';
 
 export const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
 export const MAX_UPLOAD_PAGES = 40;
+export const MAX_UPLOAD_TOKENS = 100_000;
 const KINDS: Record<string, Kind> = { md: 'md', pdf: 'pdf', txt: 'txt' };
 
 export class UploadError extends Error {
@@ -35,9 +36,22 @@ export const prepareUpload = async (name: string, data: Uint8Array) => {
   return { filename, kind };
 };
 
-export const ingestUpload = async (db: Db, embed: Embedder, sessionId: string, name: string, data: Uint8Array) => {
+export const ingestUpload = async (db: Db, embed: Embedder, sessionId: string, name: string, data: Uint8Array, withinBudget?: (estimatedTokens: number) => Promise<void>) => {
   const { filename, kind } = await prepareUpload(name, data);
-  const report = await ingestDocument(db, embed, { collection: `upload:${sessionId}`, filename, kind, data });
+  const report = await ingestDocument(db, embed, {
+    collection: `upload:${sessionId}`,
+    filename,
+    kind,
+    data,
+    beforeEmbed: async (estimatedTokens) => {
+      if (estimatedTokens > MAX_UPLOAD_TOKENS)
+        throw new UploadError(
+          `The file is about ${estimatedTokens.toLocaleString('en-US')} tokens (characters / 4); the limit is ${MAX_UPLOAD_TOKENS.toLocaleString('en-US')} tokens.`,
+          413,
+        );
+      await withinBudget?.(estimatedTokens);
+    },
+  });
   const [{ id }] = await db.query<{ id: string }>('select id::text as id from documents where collection = $1 and filename = $2', [`upload:${sessionId}`, filename]);
   return { id, filename, kind, report };
 };

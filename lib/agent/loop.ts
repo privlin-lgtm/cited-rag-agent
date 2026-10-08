@@ -48,7 +48,7 @@ export type AgentEvent =
   | { type: 'answer'; text: string }
   | { type: 'citations'; status: 'complete' | 'cut_off' | 'declined'; segments: { text: string; refs: number[] }[]; results: CitationCheck[]; excerpts: Excerpt[] }
   | { type: 'error'; message: string; excerpts: Excerpt[] }
-  | { type: 'usage'; anthropic?: Usage; embedTokens?: number };
+  | { type: 'usage'; anthropic: Usage };
 
 export type AgentDeps = {
   model: ModelCall;
@@ -148,7 +148,6 @@ export const runAgent = async (deps: AgentDeps, question: string, emit: (event: 
       const run = runs[i];
       for (const entry of run.entries) sent.push({ ...entry, index: sent.length, round: round + 1 });
       emit({ type: 'step', round: round + 1, reason: texts[i], tool: use.name, input: run.input, hits: run.hits, fallback: run.fallback, fallbackReason: run.fallbackReason, error: run.error });
-      if (run.embedTokens) emit({ type: 'usage', embedTokens: run.embedTokens });
       return {
         type: 'tool_result',
         tool_use_id: use.id,

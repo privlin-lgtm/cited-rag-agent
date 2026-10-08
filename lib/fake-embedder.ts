@@ -13,7 +13,8 @@ export const fakeVector = (text: string) => {
   return vector.map((value) => value / norm);
 };
 
-export const fakeEmbedder: Embedder = async (texts) => ({
-  embeddings: texts.map(fakeVector),
-  tokens: texts.reduce((sum, text) => sum + Math.ceil(text.length / 4), 0),
-});
+export const fakeEmbedder: Embedder = async (texts, _inputType, onBatch) => {
+  const tokens = texts.reduce((sum, text) => sum + Math.ceil(text.length / 4), 0);
+  await onBatch?.(tokens);
+  return { embeddings: texts.map(fakeVector), tokens };
+};

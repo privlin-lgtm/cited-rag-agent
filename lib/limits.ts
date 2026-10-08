@@ -4,6 +4,7 @@ import type { Db } from './db';
 export const ASK_PER_HOUR = 15;
 export const UPLOAD_PER_DAY = 10;
 export const EMBED_TOKENS_PER_DAY = 2_000_000;
+export const RESERVE_MICRO_USD = 100_000;
 const HOUR_MS = 3_600_000;
 const DAY_MS = 24 * HOUR_MS;
 
@@ -62,16 +63,31 @@ export const reserveUpload = async (db: Db, key: string, now = new Date()) => {
     throw new LimitError(`Upload limit reached: ${UPLOAD_PER_DAY} uploads a day from one address. ${resets(windowEnd(start, 'day'))}`, windowEnd(start, 'day'));
 };
 
-export const assertBudget = async (db: Db, budgetUsd: number, now = new Date()) => {
+export const reserveBudget = async (db: Db, budgetUsd: number, now = new Date()) => {
   const start = windowStart(now, 'day');
-  if ((await read(db, 'anthropic:usd', start)) >= budgetUsd * 1e6)
-    throw new LimitError(`Daily cost budget reached: the demo has spent its $${budgetUsd.toFixed(2)} for today. ${resets(windowEnd(start, 'day'))}`, windowEnd(start, 'day'));
+  if ((await add(db, 'anthropic:usd', start, RESERVE_MICRO_USD)) > budgetUsd * 1e6) {
+    await add(db, 'anthropic:usd', start, -RESERVE_MICRO_USD);
+    throw new LimitError(
+      `Daily cost budget reached: the demo's $${budgetUsd.toFixed(2)} for today is spent or held by questions in progress. ${resets(windowEnd(start, 'day'))}`,
+      windowEnd(start, 'day'),
+    );
+  }
 };
 
-export const assertEmbedBudget = async (db: Db, now = new Date()) => {
+export const releaseBudget = async (db: Db, reservedAt: Date) => {
+  await add(db, 'anthropic:usd', windowStart(reservedAt, 'day'), -RESERVE_MICRO_USD);
+};
+
+export const assertEmbedBudget = async (db: Db, now = new Date(), estimatedTokens = 0) => {
   const start = windowStart(now, 'day');
-  if ((await read(db, 'embed:tokens', start)) >= EMBED_TOKENS_PER_DAY)
-    throw new LimitError(`Embedding budget reached: ${EMBED_TOKENS_PER_DAY.toLocaleString('en-US')} tokens a day. ${resets(windowEnd(start, 'day'))}`, windowEnd(start, 'day'));
+  const used = await read(db, 'embed:tokens', start);
+  const budget = EMBED_TOKENS_PER_DAY.toLocaleString('en-US');
+  if (used >= EMBED_TOKENS_PER_DAY) throw new LimitError(`Embedding budget reached: ${budget} tokens a day. ${resets(windowEnd(start, 'day'))}`, windowEnd(start, 'day'));
+  if (used + estimatedTokens > EMBED_TOKENS_PER_DAY)
+    throw new LimitError(
+      `Embedding budget reached: this upload needs about ${estimatedTokens.toLocaleString('en-US')} tokens and ${used.toLocaleString('en-US')} of the ${budget} a day are used. ${resets(windowEnd(start, 'day'))}`,
+      windowEnd(start, 'day'),
+    );
 };
 
 export const addCost = async (db: Db, usd: number, now = new Date()) => {
