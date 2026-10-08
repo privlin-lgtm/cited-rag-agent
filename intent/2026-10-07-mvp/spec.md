@@ -1,5 +1,6 @@
 # Spec: cited-rag-agent  (from intent.md, 2026-10-07) · Status: approved
 Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); references such as (b.3) point to its items. Decisions D1–D6 at the end are confirmed by approving this spec.
+Revised 2026-10-08 with the first-cut fixes (`fix/first-cut`): features 2, 7, 9, 10 and 13, and Screens / routes.
 
 ## Stack
 - **App:** Next.js 16.4.0 (App Router, Route Handlers on the Node runtime), React 19.3.0, TypeScript `~5.9.3`, Tailwind CSS 4 with a few shadcn/ui components. Every version is pinned exactly except TypeScript (`~5.9.3`, patch updates only), and the lockfile is committed. Lint runs through the ESLint CLI, since `next lint` is gone in 16. Hosted on Vercel (Paul's Pro account), with functions in `fra1`.
@@ -27,6 +28,7 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
    - **In the UI:** each document's licence and source are shown.
 2. **Upload.**
    - **Limits:** one md, pdf or txt file at a time, at most 4 MB and 40 pages.
+   - **Token cap:** a file of any kind whose estimated tokens exceed 100,000 is refused with a 413 that names the estimate and the cap. The estimate is the sum of `Math.ceil(chars / 4)` over the chunks, taken after extraction and chunking and before any embedding call. An upload whose estimate would take today's `embed:tokens` past 2M is refused with the reset time (feature 10).
    - **Scope:** the visitor's anonymous session (an httpOnly cookie). Uploads are deleted after 24 hours, and a second upload with the same filename in the same session replaces the first.
    - **Scanned PDFs:** a PDF that yields no text is rejected with a message saying OCR is out of scope.
 3. **Ingest.**
@@ -88,6 +90,8 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
    - `done`: `{ model, inputTokens, outputTokens, cacheReadTokens, cacheWriteTokens, costUsd, latencyMs }`, with the cost taken from `lib/pricing.ts`.
    - `error`.
    The UI renders them as a live timeline.
+   - **Scores are labelled:** a hit's score reads "similarity" (cosine similarity, `search_documents`) or "keyword rank" (`ts_rank_cd`, `keyword_search` and the keyword fallback). `read_neighbours` hits have no score.
+   - **Status line:** after the first `step` and until the `citations` or `error` event arrives, whenever no streamed text is showing, the Answer section reads "Reading the passages and writing the answer…".
 8. **Checked citations** (b.3).
    - **One run-wide list:** the loop keeps a single array of every `search_result` block sent, in send order across all rounds. A citation's `search_result_index` indexes that array, because the index is global to the request, not per round.
    - **The check, for each citation:**
@@ -101,6 +105,7 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
      - A failed citation shows in red as "unchecked", never as checked.
      - The answer header reads "N of M citations checked".
 9. **Excerpts.** Beside the answer, each cited chunk shows its file, its locator and the chunk text with the cited sentences highlighted, plus a link to the source document.
+   - **Markdown documents:** for a file whose name ends in `.md`, the excerpt renders inline Markdown for display only: `**bold**`, `` `code` `` (also inside bold), `[text](target)` as its text, `<br />` as a line break, and a heading marker (`#` to `######`) at the start of a block dropped. The highlighted blocks, the stored text and the citation check are unchanged. Other files show the stored text as it is.
 10. **Abuse and spend limits** (b.8, c).
     - **Windows:** fixed. `window_start` is the start of the UTC hour or UTC day.
     - **Buckets:**
@@ -109,9 +114,11 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
       - `anthropic:usd`: daily cost budget `DAILY_ANTHROPIC_BUDGET_USD`, default 1.00 (D2).
       - `embed:tokens`: 2M a day. Once it is reached, uploads are refused with the reset time, and `search_documents` uses keyword search for the rest of the day.
     - **Counting:** one atomic `insert … on conflict (bucket, window_start) do update set count = usage_windows.count + $n returning count`.
-      - Questions and uploads are reserved before any model call, and they still count if the call fails.
-      - Cost (in micro-dollars) and embedding tokens are added after each API call, from the response's `usage`.
-      - A new question is refused once today's cost reaches the budget.
+      - Questions and uploads are reserved before any model call, and they still count if the call fails. The question is reserved right after the body validates and before the session and document lookup, so a flood does no unthrottled database work.
+      - **Budget reservation:** after the scope check, a question adds $0.10 (100,000 micro-dollars) to `anthropic:usd` with the same upsert. If the returned total passes the budget, it takes the $0.10 back and is refused with the reset time. A question therefore starts only while the day's total plus $0.10 stays within the budget, however many start together.
+      - **True-up:** cost (in micro-dollars) is added after each model call, from the response's `usage`, and the $0.10 is released when the run ends on any path (complete, cut off, declined, model error, a thrown error, a client that left). The window then holds the actual cost. A run killed by the platform before it ends leaves its $0.10 held until the window expires.
+      - **Embedding tokens** are debited as each Voyage response arrives, batch by batch, for uploads and questions alike, so tokens spent before a failure still count. An upload's estimate (feature 2) is checked against the day's total before the first batch.
+    - **Server log:** when a run ends, `handleAsk` writes one `console.info` line of JSON: `event` ("ask"), `status` (`complete`, `cut_off`, `declined` or `error`), `model`, `rounds` (tool rounds run), `toolCalls`, `keywordFallbacks`, the four token counts, `costUsd` and `latencyMs`. It never holds the question, document ids, the session id or the address hash.
     - **IP:** the first address in `x-forwarded-for`, which Vercel sets. The hash is HMAC-SHA256 keyed with `IP_HASH_SECRET`, first 16 hex characters.
     - **Messages:** each refusal says which limit was hit and when it resets.
 11. **Evals** (M4, b.9).
@@ -130,16 +137,20 @@ Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); re
     - **Credentials stay off the dev machine:** QA and production credentials live only in GitHub and Vercel, and `.env.local` holds Sandbox only.
     - **Corpus:** the pipeline ingests it after migrating when the manifest or `INGEST_VERSION` changed.
 13. **Home page demo aids.** Four example questions under the input; a footer with the model, tokens, cost and latency of the last answer; and an environment badge from `APP_ENV`.
+    - **Header:** a link to the GitHub repository, and one line under the description: "Claude searches the documents with tools and cites passages; each citation is checked against the stored text before it is marked checked."
+    - **Footer links:** the Intent, Spec and Plan links point at `blob/HEAD/intent/2026-10-07-mvp/…`, so they follow the repository's default branch.
+    - **Page metadata:** `app/icon.svg` (an indigo rounded square with a check mark) is the favicon, so `/favicon.ico` is never requested; the layout carries a description and Open Graph tags (title, description, type website), with no image.
 14. **Preview access** (c, D5). Vercel Deployment Protection is off for this project, so the Sandbox preview opens at its stable branch URL without a Vercel login. The limits in feature 10 protect the keys.
 
 ## Screens / routes
 - `/`: one responsive page. On desktop it has three columns: documents (corpus with licence badges, session uploads, scope checkboxes); the question with the agent timeline and the answer; excerpts. Below 1024 px they stack, with excerpts opening under the answer.
+- **Cross-site guard:** `POST /api/ask`, `POST /api/upload` and `DELETE /api/documents/:id` answer 403 before any reservation or database work when `Sec-Fetch-Site` is `cross-site` or `same-site`, or when an `Origin` header is present and its host differs from the request's host (the `Host` header). A request with neither header, such as curl or a test, passes. A third-party page therefore cannot make its visitors' browsers ask questions or upload.
 - `POST /api/ask`: `{ question (1–500 chars), documentIds? }` → NDJSON stream. Input is validated with zod, and the limits are checked before any model call.
 - `POST /api/upload`: multipart, one file → `{ document }` once ingested, or a 4xx with the reason.
 - `GET /api/documents`: the corpus plus this session's uploads.
 - `DELETE /api/documents/:id`: the session's own uploads only.
 - `GET /api/health`: `{ env, database, lastMigration }`, where `database` is the first 12 hex characters of the SHA-256 of `DATABASE_URL`'s host name, so environments are told apart without publishing the host.
-- `GET /api/cron/cleanup`: a Vercel Cron job, run hourly, that deletes uploads older than 24 h and expired limit windows. It is protected by `CRON_SECRET`. Vercel calls cron jobs on the production deployment only, so on the Sandbox and QA previews the job never runs by itself (M5 adds another trigger).
+- `GET /api/cron/cleanup`: a Vercel Cron job, run hourly, that deletes uploads older than 24 h and expired limit windows. It is protected by `CRON_SECRET`. Vercel calls cron jobs on the production deployment only, so on Sandbox the job is triggered hourly (minute 17) by the GitHub Actions workflow `cleanup.yml`, which sends `SANDBOX_CRON_SECRET` as the bearer token and writes the JSON response to the job summary. GitHub runs scheduled workflows from the default branch only, so the schedule starts once `sandbox` is the default branch. M5 adds QA to the workflow.
 
 ## Schema
 Every column below serves a feature above; nothing is "just in case".
