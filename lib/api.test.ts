@@ -1,5 +1,5 @@
 import type { Message, StopReason } from '@anthropic-ai/sdk/resources/messages';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import type { ModelCall, ModelParams } from './agent/loop';
 import { setup, type Fixture } from './agent/test-setup';
 import { handleAsk, handleCleanup, handleDelete, handleDocuments, handleUpload, type ApiDeps } from './api';
@@ -15,6 +15,7 @@ let fixture: Fixture;
 let modelCalls: ModelParams[];
 let script: (calls: ModelParams[]) => Message | Error;
 let gate: Promise<void>;
+let info: MockInstance<Console['info']>;
 
 const usage = { input_tokens: 100, output_tokens: 20, cache_creation_input_tokens: null, cache_read_input_tokens: null };
 const reply = (content: unknown[], stopReason: StopReason) =>
@@ -81,7 +82,12 @@ beforeEach(async () => {
   fixture = await setup();
   modelCalls = [];
   gate = Promise.resolve();
+  info = vi.spyOn(console, 'info').mockImplementation(() => {});
   script = () => reply([text('Nothing to cite.')], 'end_turn');
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
 });
 
 describe('POST /api/ask', () => {
@@ -344,6 +350,66 @@ describe('GET /api/documents and DELETE /api/documents/:id', () => {
   it('answers 404 when the request has no session', async () => {
     const mine = await ingestUpload(fixture.db, fakeEmbedder, 'sess1', 'mine.txt', new TextEncoder().encode('Mine.'));
     expect((await handleDelete(deleteRequest(), mine.id, deps({}, null))).status).toBe(404);
+  });
+});
+
+describe('the server log line', () => {
+  const logged = () => info.mock.calls.map(([line]) => JSON.parse(String(line)) as Record<string, unknown>);
+
+  it('writes exactly one JSON line per completed run, with counts, tokens, cost and latency, and nothing from the request', async () => {
+    script = (calls) =>
+      calls.length === 1
+        ? reply([text('Looking.'), toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 3 })], 'tool_use')
+        : reply([text('Cancel within 30 minutes.', [cite(0, 0)])], 'end_turn');
+    await events(await handleAsk(askRequest({ question: 'How long does the zebra wait?', documentIds: [fixture.ids['cancel.md']] }), deps()));
+    expect(info).toHaveBeenCalledOnce();
+    expect(logged()[0]).toEqual({
+      event: 'ask',
+      status: 'complete',
+      rounds: 1,
+      toolCalls: 1,
+      keywordFallbacks: 0,
+      model: 'claude-sonnet-5-5',
+      inputTokens: 200,
+      outputTokens: 40,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      costUsd: expect.closeTo(0.0008, 8),
+      latencyMs: expect.any(Number),
+    });
+    const raw = String(info.mock.calls[0][0]);
+    for (const hidden of ['zebra', 'sess1', fixture.ids['cancel.md'], clientKey(new Headers({ 'x-forwarded-for': IP }), 'ip-secret'), IP]) expect(raw).not.toContain(hidden);
+  });
+
+  it.each([
+    ['cut_off', () => reply([text('Partial')], 'max_tokens')],
+    ['declined', () => reply([], 'refusal')],
+    ['error', () => new Error('Overloaded')],
+    ['error', () => reply([text('?')], 'stop_sequence')],
+  ])('writes one line with status %s', async (status, next) => {
+    script = next;
+    await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));
+    expect(info).toHaveBeenCalledOnce();
+    expect(logged()[0]).toMatchObject({ event: 'ask', status });
+  });
+
+  it('counts the keyword fallbacks and every tool call', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    await addEmbedTokens(fixture.db, EMBED_TOKENS_PER_DAY, NOW);
+    script = (calls) =>
+      calls.length === 1
+        ? reply([toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer' }), toolUse('t2', 'list_documents', {})], 'tool_use')
+        : reply([text('Done.')], 'end_turn');
+    await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));
+    expect(logged()[0]).toMatchObject({ status: 'complete', rounds: 1, toolCalls: 2, keywordFallbacks: 1 });
+  });
+
+  it('writes nothing for a question that was refused before a run', async () => {
+    await handleAsk(askRequest('not json'), deps());
+    await handleAsk(askRequest({ question: 'Hi?' }, IP, { 'sec-fetch-site': 'cross-site' }), deps());
+    await addCost(fixture.db, 1, NOW);
+    expect((await handleAsk(askRequest({ question: 'Hi?' }), deps())).status).toBe(429);
+    expect(info).not.toHaveBeenCalled();
   });
 });
 

@@ -83,6 +83,8 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
           };
           const totals = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
           let cost = 0;
+          const run = { status: 'error' as 'complete' | 'cut_off' | 'declined' | 'error', rounds: 0, toolCalls: 0, keywordFallbacks: 0 };
+          const result = () => ({ model: deps.model.id, ...totals, costUsd: cost, latencyMs: Math.round(performance.now() - started) });
           let recording: Promise<unknown> = Promise.resolve();
           const record = ({ anthropic: usage }: Extract<AgentEvent, { type: 'usage' }>) => {
             const counts = {
@@ -114,19 +116,29 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
                 question,
                 (event) => {
                   if (event.type === 'usage') return record(event);
-                  if (event.type === 'step' && event.fallback) console.warn(`${event.tool} fell back to keyword search: ${event.fallbackReason}`);
+                  if (event.type === 'citations') run.status = event.status;
+                  if (event.type === 'step') {
+                    run.rounds = event.round;
+                    run.toolCalls++;
+                    if (event.fallback) {
+                      run.keywordFallbacks++;
+                      console.warn(`${event.tool} fell back to keyword search: ${event.fallbackReason}`);
+                    }
+                  }
                   write(event);
                 },
               );
               await recording;
             } catch (error) {
+              run.status = 'error';
               write({ type: 'error', message: error instanceof Error ? error.message : String(error), excerpts: [] });
               await recording;
             }
           } finally {
+            console.info(JSON.stringify({ event: 'ask', ...run, ...result() }));
             await releaseBudget(deps.db, reservedAt);
           }
-          write({ type: 'done', model: deps.model.id, ...totals, costUsd: cost, latencyMs: Math.round(performance.now() - started) });
+          write({ type: 'done', ...result() });
           if (!closed) controller.close();
         },
       }),
