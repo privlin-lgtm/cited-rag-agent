@@ -53,8 +53,12 @@ const deps = (overrides: Partial<ApiDeps> = {}, session: string | null = 'sess1'
   ...overrides,
 });
 
-const askRequest = (body: unknown, address = IP) =>
-  new Request('http://test/api/ask', { method: 'POST', headers: { 'content-type': 'application/json', 'x-forwarded-for': address }, body: typeof body === 'string' ? body : JSON.stringify(body) });
+const askRequest = (body: unknown, address = IP, headers: Record<string, string> = {}) =>
+  new Request('http://test/api/ask', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': address, ...headers },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
+  });
 
 type Line = { type: string; results?: unknown; costUsd: number; latencyMs: number; hits: { file: string }[] };
 const events = async (response: Response) =>
@@ -63,11 +67,13 @@ const events = async (response: Response) =>
     .split('\n')
     .map((line) => JSON.parse(line) as Line);
 
-const uploadRequest = (name: string, data: Uint8Array | string, field = 'file') => {
+const uploadRequest = (name: string, data: Uint8Array | string, field = 'file', headers: Record<string, string> = {}) => {
   const form = new FormData();
   form.set(field, new File([data as BlobPart], name));
-  return new Request('http://test/api/upload', { method: 'POST', headers: { 'x-forwarded-for': IP }, body: form });
+  return new Request('http://test/api/upload', { method: 'POST', headers: { 'x-forwarded-for': IP, ...headers }, body: form });
 };
+
+const deleteRequest = (headers: Record<string, string> = {}) => new Request('http://test/api/documents/id', { method: 'DELETE', headers });
 
 const spent = async (bucket: string) => (await fixture.db.query<{ count: number }>('select count::float8 as count from usage_windows where bucket = $1', [bucket]))[0]?.count ?? 0;
 
@@ -327,17 +333,69 @@ describe('GET /api/documents and DELETE /api/documents/:id', () => {
   it("deletes the session's own upload, and nothing else", async () => {
     const mine = await ingestUpload(fixture.db, fakeEmbedder, 'sess1', 'mine.txt', new TextEncoder().encode('Mine.'));
     const theirs = await ingestUpload(fixture.db, fakeEmbedder, 'sess2', 'theirs.txt', new TextEncoder().encode('Theirs.'));
-    expect((await handleDelete(theirs.id, deps())).status).toBe(404);
-    expect((await handleDelete(fixture.ids['cancel.md'], deps())).status).toBe(404);
-    expect((await handleDelete('not-a-uuid', deps())).status).toBe(400);
-    expect((await handleDelete(mine.id, deps())).status).toBe(204);
-    expect((await handleDelete(mine.id, deps())).status).toBe(404);
+    expect((await handleDelete(deleteRequest(), theirs.id, deps())).status).toBe(404);
+    expect((await handleDelete(deleteRequest(), fixture.ids['cancel.md'], deps())).status).toBe(404);
+    expect((await handleDelete(deleteRequest(), 'not-a-uuid', deps())).status).toBe(400);
+    expect((await handleDelete(deleteRequest(), mine.id, deps())).status).toBe(204);
+    expect((await handleDelete(deleteRequest(), mine.id, deps())).status).toBe(404);
     expect(await fixture.db.query('select count(*)::int as n from documents')).toEqual([{ n: 5 }]);
   });
 
   it('answers 404 when the request has no session', async () => {
     const mine = await ingestUpload(fixture.db, fakeEmbedder, 'sess1', 'mine.txt', new TextEncoder().encode('Mine.'));
-    expect((await handleDelete(mine.id, deps({}, null))).status).toBe(404);
+    expect((await handleDelete(deleteRequest(), mine.id, deps({}, null))).status).toBe(404);
+  });
+});
+
+describe('the cross-site write guard', () => {
+  const foreign: Record<string, string>[] = [
+    { 'sec-fetch-site': 'cross-site' },
+    { 'sec-fetch-site': 'same-site' },
+    { origin: 'https://example.com' },
+    { origin: 'http://test:3000' },
+    { origin: 'null' },
+    { 'sec-fetch-site': 'same-origin', origin: 'https://example.com' },
+  ];
+  const own: Record<string, string>[] = [{},{ 'sec-fetch-site': 'same-origin' }, { 'sec-fetch-site': 'none' }, { origin: 'http://test' }, { 'sec-fetch-site': 'same-origin', origin: 'http://test' }];
+  const nothingReserved = async () => expect(await fixture.db.query('select bucket from usage_windows')).toEqual([]);
+
+  it('answers POST /api/ask with 403 before any reservation, database work or model call, and lets the site itself through', async () => {
+    for (const headers of foreign) {
+      const response = await handleAsk(askRequest({ question: 'How long to cancel?' }, IP, headers), deps({ sessionId: async () => Promise.reject(new Error('no session work')) }));
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({ error: 'Cross-site requests are not allowed.' });
+    }
+    expect(modelCalls).toHaveLength(0);
+    await nothingReserved();
+    for (const headers of own) expect((await events(await handleAsk(askRequest({ question: 'How long to cancel?' }, IP, headers), deps()))).at(-1)?.type).toBe('done');
+  });
+
+  it('answers POST /api/upload with 403 before any reservation or embedding, and lets the site itself through', async () => {
+    const embedder = vi.fn(fakeEmbedder);
+    for (const headers of foreign) {
+      const response = await handleUpload(uploadRequest('notes.md', '# A\nText.', 'file', headers), deps({ documentEmbedder: embedder, sessionId: async () => Promise.reject(new Error('no session work')) }));
+      expect(response.status).toBe(403);
+    }
+    expect(embedder).not.toHaveBeenCalled();
+    await nothingReserved();
+    for (const headers of own) expect((await handleUpload(uploadRequest('notes.md', '# A\nText.', 'file', headers), deps())).status).toBe(200);
+  });
+
+  it('answers DELETE /api/documents/:id with 403 and keeps the upload, and lets the site itself through', async () => {
+    const mine = await ingestUpload(fixture.db, fakeEmbedder, 'sess1', 'mine.txt', new TextEncoder().encode('Mine.'));
+    for (const headers of foreign) expect((await handleDelete(deleteRequest(headers), mine.id, deps({ sessionId: async () => Promise.reject(new Error('no session work')) }))).status).toBe(403);
+    expect(await fixture.db.query("select filename from documents where collection like 'upload:%'")).toEqual([{ filename: 'mine.txt' }]);
+    for (const headers of own) {
+      const again = await ingestUpload(fixture.db, fakeEmbedder, 'sess1', 'again.txt', new TextEncoder().encode('Mine.'));
+      expect((await handleDelete(deleteRequest(headers), again.id, deps())).status).toBe(204);
+    }
+  });
+
+  it('compares the Origin with the Host header when the request has one', async () => {
+    const request = askRequest({ question: 'How long to cancel?' }, IP, { host: 'cited.example', origin: 'https://cited.example' });
+    expect((await events(await handleAsk(request, deps()))).at(-1)?.type).toBe('done');
+    const other = askRequest({ question: 'How long to cancel?' }, IP, { host: 'cited.example', origin: 'http://test' });
+    expect((await handleAsk(other, deps())).status).toBe(403);
   });
 });
 

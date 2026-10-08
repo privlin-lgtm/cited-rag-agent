@@ -3,4 +3,4 @@ import { apiDeps } from '../../../../lib/deps';
 
 export const dynamic = 'force-dynamic';
 
-export const DELETE = async (_request: Request, { params }: { params: Promise<{ id: string }> }) => handleDelete((await params).id, apiDeps());
+export const DELETE = async (request: Request, { params }: { params: Promise<{ id: string }> }) => handleDelete(request, (await params).id, apiDeps());
