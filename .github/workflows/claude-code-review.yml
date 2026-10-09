@@ -187,6 +187,7 @@ jobs:
           denied=$(jq -r '[.permission_denials[]?.tool_name] | unique | join(", ")' <<< "$res")
           problems=()
           [ -z "$missing" ] || problems+=("Files neither reviewed nor skipped: $(paste -sd, <<< "$missing" | sed 's/,/, /g')")
+          [ "$(jq '.files_reviewed | length' <<< "$RESULT")" -gt 0 ] || problems+=("Every file was skipped, so nothing was reviewed.")
           [ -z "$unread" ] || problems+=("No tool call read these files: $(paste -sd, <<< "$unread" | sed 's/,/, /g')")
           if [ ${#reviewed} -lt 7 ] || [ "${HEAD_SHA#"$reviewed"}" = "$HEAD_SHA" ]; then
             problems+=("The review reports commit \`$reviewed\`, not \`$short\`.")
@@ -207,7 +208,7 @@ jobs:
               echo
               echo '| Severity | Pass | Where | Finding |'
               echo '|---|---|---|---|'
-              jq -r --arg u "$blob" '.findings[] | "| \(if .severity == "important" then "Important" else "Nit" end) | \(.pass) | [\(.path):\(.line)](\($u)/\(.path)#L\(.line)) | \(.title | gsub("\\|"; "\\|") | gsub("\n"; " ")) |"' <<< "$RESULT"
+              jq -r --arg u "$blob" '.findings[] | "| \(if .severity == "important" then "Important" else "Nit" end) | \(.pass | gsub("\\|"; "\\|")) | [\(.path):\(.line)](\($u)/\(.path)#L\(.line)) | \(.title | gsub("\\|"; "\\|") | gsub("\n"; " ")) |"' <<< "$RESULT"
               jq -r '.findings[] | select(.posted_inline | not) | "\n**\(.title)** (`\(.path):\(.line)`): \(.detail)"' <<< "$RESULT"
             fi
             jq -r 'if (.files_skipped | length) > 0 then "\n**Skipped:** " + ([.files_skipped[] | "`\(.path)` (\(.reason))"] | join("; ")) else empty end' <<< "$RESULT"
