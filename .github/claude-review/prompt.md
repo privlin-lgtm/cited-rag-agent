@@ -18,6 +18,7 @@ Read these from the rules ref given under "This run", with `git show <rules ref>
    - Fail-soft: every item in the list below.
    - Rules: violations of a rule in REVIEW.md, CLAUDE.md or AGENTS.md. Quote the rule.
    - Claims: statements in changed docs, handoff files, the PR title and body, and commit messages in the range (`git log <range>`) that something is live, verified, working, fixed, confirmed or done. Each needs evidence in the repo or the PR (a test, a walk file, a run, a link). Flag the ones that have none.
+   Also make every pass that REVIEW.md defines, and tag each finding with the name of the pass that found it.
    When more than about 1,500 lines changed, split the bug and fail-soft passes across parallel subagents by file group, and give each the rules, the range and its files.
 4. Validate every candidate with a separate subagent that reads the actual code and confirms or rejects it. Keep only confirmed findings, each with a file and line.
 5. In incremental mode, check each finding in the last review summary. Any that this range does not fix go back into `findings` with their current line.

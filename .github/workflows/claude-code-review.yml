@@ -115,7 +115,7 @@ jobs:
             --model claude-opus-5-5
             --max-turns 80
             --allowedTools "Read,Grep,Glob,Task,Agent,Bash(git diff:*),Bash(git log:*),Bash(git show:*),mcp__github_inline_comment__create_inline_comment"
-            --json-schema '{"type":"object","required":["reviewed_sha","files_reviewed","files_skipped","findings","not_checked"],"properties":{"reviewed_sha":{"type":"string"},"files_reviewed":{"type":"array","items":{"type":"string"}},"files_skipped":{"type":"array","items":{"type":"object","required":["path","reason"],"properties":{"path":{"type":"string"},"reason":{"type":"string"}}}},"findings":{"type":"array","items":{"type":"object","required":["severity","path","line","title","detail","posted_inline"],"properties":{"severity":{"type":"string","enum":["important","nit"]},"path":{"type":"string"},"line":{"type":"integer"},"title":{"type":"string"},"detail":{"type":"string"},"posted_inline":{"type":"boolean"}}}},"not_checked":{"type":"array","items":{"type":"string"}}}}'
+            --json-schema '{"type":"object","required":["reviewed_sha","files_reviewed","files_skipped","findings","not_checked"],"properties":{"reviewed_sha":{"type":"string"},"files_reviewed":{"type":"array","items":{"type":"string"}},"files_skipped":{"type":"array","items":{"type":"object","required":["path","reason"],"properties":{"path":{"type":"string"},"reason":{"type":"string"}}}},"findings":{"type":"array","items":{"type":"object","required":["severity","pass","path","line","title","detail","posted_inline"],"properties":{"severity":{"type":"string","enum":["important","nit"]},"pass":{"type":"string"},"path":{"type":"string"},"line":{"type":"integer"},"title":{"type":"string"},"detail":{"type":"string"},"posted_inline":{"type":"boolean"}}}},"not_checked":{"type":"array","items":{"type":"string"}}}}'
 
       - name: Publish and verify the review
         if: ${{ !cancelled() && steps.scope.outcome == 'success' }}
@@ -177,7 +177,8 @@ jobs:
           if [ "$DIFF_BYTES" -le 25000 ] && [ "$full_diffs" -gt 0 ]; then
             unread=""
           else
-            unread=$(while read -r f; do [ -z "$f" ] || grep -qF -- "$f" "$RUNNER_TEMP/tool-inputs.txt" || echo "$f"; done < "$RUNNER_TEMP/reviewable.txt")
+            jq -r '.files_skipped[].path' <<< "$RESULT" > "$RUNNER_TEMP/skipped.txt"
+            unread=$(while read -r f; do [ -z "$f" ] || grep -qxF -- "$f" "$RUNNER_TEMP/skipped.txt" || grep -qF -- "$f" "$RUNNER_TEMP/tool-inputs.txt" || echo "$f"; done < "$RUNNER_TEMP/reviewable.txt")
           fi
           reviewed=$(jq -r '.reviewed_sha' <<< "$RESULT")
           important=$(jq '[.findings[] | select(.severity == "important")] | length' <<< "$RESULT")
@@ -204,9 +205,9 @@ jobs:
             echo "**Important: $important. Nits: $nits.** Scope: $scope."
             if [ $((important + nits)) -gt 0 ]; then
               echo
-              echo '| Severity | Where | Finding |'
-              echo '|---|---|---|'
-              jq -r --arg u "$blob" '.findings[] | "| \(if .severity == "important" then "Important" else "Nit" end) | [\(.path):\(.line)](\($u)/\(.path)#L\(.line)) | \(.title | gsub("\\|"; "\\|") | gsub("\n"; " ")) |"' <<< "$RESULT"
+              echo '| Severity | Pass | Where | Finding |'
+              echo '|---|---|---|---|'
+              jq -r --arg u "$blob" '.findings[] | "| \(if .severity == "important" then "Important" else "Nit" end) | \(.pass) | [\(.path):\(.line)](\($u)/\(.path)#L\(.line)) | \(.title | gsub("\\|"; "\\|") | gsub("\n"; " ")) |"' <<< "$RESULT"
               jq -r '.findings[] | select(.posted_inline | not) | "\n**\(.title)** (`\(.path):\(.line)`): \(.detail)"' <<< "$RESULT"
             fi
             jq -r 'if (.files_skipped | length) > 0 then "\n**Skipped:** " + ([.files_skipped[] | "`\(.path)` (\(.reason))"] | join("; ")) else empty end' <<< "$RESULT"
