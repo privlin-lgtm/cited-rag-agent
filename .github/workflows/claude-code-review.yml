@@ -61,7 +61,8 @@ jobs:
           git diff --name-only "$range" > "$RUNNER_TEMP/changed.txt"
           echo "$SKIP_RE" > "$RUNNER_TEMP/skip-patterns.txt"
           if git cat-file -e "$rules_ref:.github/claude-review/skip.txt" 2>/dev/null; then
-            git show "$rules_ref:.github/claude-review/skip.txt" | grep -v '^$' >> "$RUNNER_TEMP/skip-patterns.txt"
+            git show "$rules_ref:.github/claude-review/skip.txt" > "$RUNNER_TEMP/skip-extra.txt"
+            { grep -v '^[[:space:]]*$' "$RUNNER_TEMP/skip-extra.txt" || [ $? -eq 1 ]; } >> "$RUNNER_TEMP/skip-patterns.txt"
           fi
           { grep -Evf "$RUNNER_TEMP/skip-patterns.txt" "$RUNNER_TEMP/changed.txt" || [ $? -eq 1 ]; } > "$RUNNER_TEMP/reviewable.txt"
           if { [ "$mode" = full ] || [ "$mode" = incremental ]; } && [ ! -s "$RUNNER_TEMP/reviewable.txt" ]; then
