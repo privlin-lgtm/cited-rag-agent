@@ -59,7 +59,11 @@ jobs:
             range="$prev..$HEAD_SHA"
           fi
           git diff --name-only "$range" > "$RUNNER_TEMP/changed.txt"
-          { grep -Ev "$SKIP_RE" "$RUNNER_TEMP/changed.txt" || [ $? -eq 1 ]; } > "$RUNNER_TEMP/reviewable.txt"
+          echo "$SKIP_RE" > "$RUNNER_TEMP/skip-patterns.txt"
+          if git cat-file -e "$rules_ref:.github/claude-review/skip.txt" 2>/dev/null; then
+            git show "$rules_ref:.github/claude-review/skip.txt" | grep -v '^$' >> "$RUNNER_TEMP/skip-patterns.txt"
+          fi
+          { grep -Evf "$RUNNER_TEMP/skip-patterns.txt" "$RUNNER_TEMP/changed.txt" || [ $? -eq 1 ]; } > "$RUNNER_TEMP/reviewable.txt"
           if { [ "$mode" = full ] || [ "$mode" = incremental ]; } && [ ! -s "$RUNNER_TEMP/reviewable.txt" ]; then
             mode=trivial
           fi
@@ -153,7 +157,7 @@ jobs:
               [ "$PREV_IMPORTANT" -eq 0 ] || { echo "::error::$PREV_IMPORTANT important finding(s) on $short are still open"; exit 1; }
               exit 0 ;;
             trivial)
-              echo "Not sent for review: every changed file is a lockfile, image or screenshot baseline." >> "$GITHUB_STEP_SUMMARY"
+              echo "Not sent for review: every changed file matches the skip list (lockfiles, images, screenshot baselines, .github/claude-review/skip.txt)." >> "$GITHUB_STEP_SUMMARY"
               [ "$PREV_IMPORTANT" -eq 0 ] || { echo "::error::$PREV_IMPORTANT important finding(s) from ${PREV:0:7} are still open"; exit 1; }
               exit 0 ;;
             dependabot)
@@ -187,7 +191,7 @@ jobs:
           denied=$(jq -r '[.permission_denials[]?.tool_name] | unique | join(", ")' <<< "$res")
           problems=()
           [ -z "$missing" ] || problems+=("Files neither reviewed nor skipped: $(paste -sd, <<< "$missing" | sed 's/,/, /g')")
-          [ "$(jq '.files_reviewed | length' <<< "$RESULT")" -gt 0 ] || problems+=("Every file was skipped, so nothing was reviewed.")
+          [ "$(jq --rawfile files "$RUNNER_TEMP/reviewable.txt" '[.files_reviewed[] | select(IN(($files | split("\n"))[]))] | length' <<< "$RESULT")" -gt 0 ] || problems+=("No changed file was reviewed: every one was skipped or named a path outside the diff.")
           [ -z "$unread" ] || problems+=("No tool call read these files: $(paste -sd, <<< "$unread" | sed 's/,/, /g')")
           if [ ${#reviewed} -lt 7 ] || [ "${HEAD_SHA#"$reviewed"}" = "$HEAD_SHA" ]; then
             problems+=("The review reports commit \`$reviewed\`, not \`$short\`.")
