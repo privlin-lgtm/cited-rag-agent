@@ -7,7 +7,7 @@ import type { Question } from '../lib/evals';
 import { fakeEmbedder } from '../lib/fake-embedder';
 import { INGEST_VERSION, ingestDocument } from '../lib/ingest';
 import { makePdf } from '../lib/test-pdf';
-import { assertFresh, consoleText, corpusState, markdown, runEval, verdict, type EvalReport } from './eval';
+import { assertFresh, consoleText, corpusState, loadThreshold, markdown, runEval, verdict, type EvalReport } from './eval';
 import { migrate } from './migrate';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -161,6 +161,14 @@ describe('the threshold exit code', () => {
 
   it('says what it compared and where the threshold came from', () => {
     expect(verdict(report(10, 14), threshold).text).toBe('hit@5 10/14 is below the threshold 11/14 (set 2026-10-13 from abc1234)');
+  });
+});
+
+describe('the committed threshold file', () => {
+  it('holds a count out of the question set size, the date and the full commit of the first honest run', async () => {
+    const threshold = await loadThreshold();
+    expect(threshold).toEqual({ hitAt5: expect.any(Number), of: expect.any(Number), date: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/), commit: expect.stringMatching(/^[0-9a-f]{40}$/) });
+    expect(threshold!.hitAt5).toBeLessThanOrEqual(threshold!.of);
   });
 });
 
