@@ -14,7 +14,7 @@ export const SEMANTIC_SQL = `with relaxed as materialized (
   from relaxed r
   join chunks c on c.id = r.id
   join documents d on d.id = c.document_id
-  order by r.distance + 0 desc`;
+  order by r.distance + 0`;
 
 export const semanticSearch = async (db: Db, embedding: number[], { k = 5, documentIds }: SearchOptions): Promise<Hit[]> =>
   documentIds.length
