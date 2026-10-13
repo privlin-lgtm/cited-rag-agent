@@ -13,6 +13,7 @@
     "migrate": "tsx --env-file-if-exists=.env.local scripts/migrate.ts",
     "corpus:fetch": "tsx scripts/corpus-fetch.ts",
     "ingest:corpus": "tsx --env-file-if-exists=.env.local scripts/ingest-corpus.ts",
+    "eval": "tsx --env-file-if-exists=.env.local scripts/eval.ts",
     "smoke:sql": "tsx --env-file-if-exists=.env.local scripts/smoke-sql.ts"
   },
   "dependencies": {

@@ -9,6 +9,7 @@ import { ingestDocument } from '../lib/ingest';
 import { addCost, addEmbedTokens, assertEmbedBudget, deleteExpiredWindows, releaseBudget, reserveBudget, reserveQuestion, reserveUpload } from '../lib/limits';
 import { keywordSearch, semanticSearch } from '../lib/search';
 import { ingestUpload } from '../lib/upload';
+import { corpusState } from './eval';
 import { migrate } from './migrate';
 
 class Rollback extends Error {}
@@ -56,6 +57,10 @@ export const steps: SmokeStep[] = [
     step('search: keyword, scoped to the smoke document');
     const keyword = await keywordSearch(db, '"1005.33"', { k: 3, documentIds: [id] });
     if (!keyword.length) throw new Error('keyword search returned no hit');
+  },
+  async ({ db, step }) => {
+    step('eval: corpus freshness select');
+    await corpusState(db);
   },
   async ({ db, step }) => {
     step('limits: reserve question and upload, reserve and release budget, add cost and embedding tokens, check embedding budget, clear expired windows');
