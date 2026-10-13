@@ -1,0 +1,116 @@
+[
+  {
+    "id": "cancel-window",
+    "question": "How long does a sender have to cancel a remittance transfer?",
+    "expected": [
+      { "filename": "cfpb_remittance-transfers_small-entity-compliance-guide.pdf", "locator": "p. 10" },
+      { "filename": "cfpb_remittance-transfers_small-entity-compliance-guide.pdf", "locator": "p. 38" },
+      { "filename": "cfpb_remittance-transfer-examination-procedures.pdf", "locator": "p. 57" },
+      { "filename": "cfpb_remittance-transfer-examination-procedures.pdf", "locator": "p. 58" },
+      { "filename": "cfpb_remittance-transfer-examination-procedures.pdf", "locator": "p. 78" },
+      { "filename": "regulation-e-subpart-b.txt", "locator": "lines 327–343" }
+    ]
+  },
+  {
+    "id": "strong-customer-authentication",
+    "question": "What is strong customer authentication?",
+    "expected": [{ "filename": "directive-eu-2015-2366-psd2.pdf", "locator": "p. 25" }]
+  },
+  {
+    "id": "mojaloop-transfer-phases",
+    "question": "What are the phases of a Mojaloop transfer?",
+    "expected": [
+      { "filename": "mojaloop/generic-transaction-patterns.md", "locator": "§ Generic Transaction Patterns › Payer-Initiated Transaction › Internal Processing Steps" },
+      { "filename": "mojaloop/generic-transaction-patterns.md", "locator": "§ Generic Transaction Patterns › Payee-Initiated Transaction › Internal Processing Steps" }
+    ]
+  },
+  {
+    "id": "table-small-sender-domestic",
+    "question": "A bank sends 300 international wires and 300 domestic wires for consumers each year. Is it small enough to be left out of the remittance transfer rule?",
+    "expected": [{ "filename": "cfpb_remittance-transfers_small-entity-compliance-guide.pdf", "locator": "p. 17" }]
+  },
+  {
+    "id": "table-correspondent-fee",
+    "question": "A bank sends international wires through a correspondent bank that charges $5 a wire, and the bank pays that $5 itself instead of passing it on. Does the customer have to be shown that fee?",
+    "expected": [{ "filename": "cfpb_remittance-transfers_small-entity-compliance-guide.pdf", "locator": "p. 24" }]
+  },
+  {
+    "id": "money-never-arrived",
+    "question": "What can I do if money I sent abroad never reached the person I sent it to?",
+    "expected": [
+      { "filename": "cfpb_remittance-transfers_small-entity-compliance-guide.pdf", "locator": "p. 10" },
+      { "filename": "cfpb_remittance-transfers_small-entity-compliance-guide.pdf", "locator": "p. 41" },
+      { "filename": "cfpb_remittance-transfer-examination-procedures.pdf", "locator": "p. 2" },
+      { "filename": "cfpb_remittance-transfer-examination-procedures.pdf", "locator": "p. 53" },
+      { "filename": "cfpb_remittance-transfer-examination-procedures.pdf", "locator": "p. 54" },
+      { "filename": "regulation-e-subpart-b.txt", "locator": "lines 281–295" }
+    ]
+  },
+  {
+    "id": "agent-mistakes",
+    "question": "Is a money transfer company responsible when one of its agents breaks the rules?",
+    "expected": [
+      { "filename": "cfpb_remittance-transfers_small-entity-compliance-guide.pdf", "locator": "p. 10" },
+      { "filename": "cfpb_remittance-transfers_small-entity-compliance-guide.pdf", "locator": "p. 45" },
+      { "filename": "cfpb_remittance-transfer-examination-procedures.pdf", "locator": "p. 2" },
+      { "filename": "cfpb_remittance-transfer-examination-procedures.pdf", "locator": "p. 58" },
+      { "filename": "regulation-e-subpart-b.txt", "locator": "lines 343–355" }
+    ]
+  },
+  {
+    "id": "stolen-card-losses",
+    "question": "If someone steals my card and spends money before I report it, how much can I be made to pay?",
+    "expected": [
+      { "filename": "directive-eu-2015-2366-psd2.pdf", "locator": "p. 13" },
+      { "filename": "directive-eu-2015-2366-psd2.pdf", "locator": "p. 62" }
+    ]
+  },
+  {
+    "id": "records-retention",
+    "question": "How long does a company that sends money abroad have to keep its paperwork on customer complaints about a transfer?",
+    "expected": [
+      { "filename": "cfpb_remittance-transfers_small-entity-compliance-guide.pdf", "locator": "p. 44" },
+      { "filename": "cfpb_remittance-transfer-examination-procedures.pdf", "locator": "p. 18" },
+      { "filename": "cfpb_remittance-transfer-examination-procedures.pdf", "locator": "p. 61" },
+      { "filename": "cfpb_remittance-transfer-examination-procedures.pdf", "locator": "p. 78" }
+    ]
+  },
+  {
+    "id": "wrong-account-number",
+    "question": "If I typed the wrong account number for someone abroad and the money landed in a stranger's account, does the provider still have to give it back?",
+    "expected": [
+      { "filename": "cfpb_remittance-transfers_small-entity-compliance-guide.pdf", "locator": "p. 42" },
+      { "filename": "cfpb_remittance-transfer-examination-procedures.pdf", "locator": "p. 49" },
+      { "filename": "cfpb_remittance-transfer-examination-procedures.pdf", "locator": "p. 50" },
+      { "filename": "regulation-e-subpart-b.txt", "locator": "lines 317–327" },
+      { "filename": "regulation-e-subpart-b.txt", "locator": "lines 327–343" }
+    ]
+  },
+  {
+    "id": "mojaloop-find-bank",
+    "question": "How does Mojaloop work out which bank holds the account for a given phone number?",
+    "expected": [
+      { "filename": "mojaloop/account-lookup-service.md", "locator": "§ Account Lookup Service › 1. Design Considerations › 1.1. Account Lookup Service (ALS)" },
+      { "filename": "mojaloop/account-lookup-service.md", "locator": "§ Account Lookup Service › 1. Design Considerations › 1.2. ALS Oracle" },
+      { "filename": "mojaloop/generic-transaction-patterns.md", "locator": "§ Generic Transaction Patterns › Payer-Initiated Transaction › Internal Processing Steps › Lookup Counterparty" }
+    ]
+  },
+  {
+    "id": "mojaloop-quote-record",
+    "question": "What does the Mojaloop quoting service store about a quote?",
+    "expected": [{ "filename": "mojaloop/quoting-agreement-bounded-context.md", "locator": "§ Quoting/Agreements BC › Canonical Quote Model" }]
+  },
+  {
+    "id": "mojaloop-liquidity",
+    "question": "How does Mojaloop make sure a bank can cover the payments it sends?",
+    "expected": [
+      { "filename": "mojaloop/settlement-basic-concepts.md", "locator": "§ Basic concepts › Liquidity cover" },
+      { "filename": "mojaloop/settlement-basic-concepts.md", "locator": "§ Basic concepts › Liquidity management (Net Debit Cap)" }
+    ]
+  },
+  {
+    "id": "mojaloop-unilateral-timeout",
+    "question": "Can the sending bank cancel a Mojaloop transfer on its own if the other side is slow to respond?",
+    "expected": [{ "filename": "mojaloop/transfers-bounded-context.md", "locator": "§ Transfers BC › Concluding Comments" }]
+  }
+]
