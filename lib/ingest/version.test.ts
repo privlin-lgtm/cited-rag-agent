@@ -20,10 +20,13 @@ const section = (n: number) =>
     `Wire | $${n}.00`,
   ].join('\n');
 
-const markdown = `---\ntitle: fixture\n---\n# Fixture\n${[1, 2, 3, 4].map(section).join('\n\n')}`;
+const markdown = `---\ntitle: fixture\n---\n# Fixture\n## Fixture\nIntroduction to the fixture.\n\n${[1, 2, 3, 4].map(section).join('\n\n')}`;
 const text = Array.from({ length: 12 }, (_, i) => `Paragraph ${i}. ${'Remittance transfers are covered. '.repeat(25)}`).join('\n\n');
 
 const pdfPages = Array.from({ length: 6 }, (_, i) => [
+  'GUIDE',
+  'Procedures',
+  'Requirements',
   `GUIDE HEADER v 1.0 page ${i + 1}`,
   ...Array.from({ length: 8 }, (_, j) => `Line ${j} of ${String.fromCharCode(97 + i).repeat(5)} says that a sender may cancel a transfer.`),
   `Footer ${String.fromCharCode(97 + i).repeat(4)} note.`,
@@ -38,7 +41,7 @@ it('changes only together with INGEST_VERSION when extraction, chunking or sente
   ];
   const output = JSON.stringify({ chunks, blocks: chunks.map(({ content }) => splitSentences(content)) });
   expect({ version: INGEST_VERSION, hash: createHash('sha256').update(output).digest('hex') }).toEqual({
-    version: 2,
-    hash: '0c8706ab0416ad653814d8796a31b5bd790f4517f86ed462653eb7554e53ca0e',
+    version: 3,
+    hash: 'c816d5e51aadcb8389296132ae2673e43293ab73dce395c72e825ccafe3ca2bd',
   });
 });
