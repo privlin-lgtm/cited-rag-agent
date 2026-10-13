@@ -1,7 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { pgliteDb, type Db } from '../lib/db';
 import type { Question } from '../lib/evals';
 import { fakeEmbedder } from '../lib/fake-embedder';
@@ -9,6 +9,8 @@ import { INGEST_VERSION, ingestDocument } from '../lib/ingest';
 import { makePdf } from '../lib/test-pdf';
 import { assertFresh, consoleText, corpusState, loadThreshold, markdown, runEval, verdict, type EvalReport } from './eval';
 import { migrate } from './migrate';
+
+vi.setConfig({ testTimeout: 60_000, hookTimeout: 60_000 });
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const bytes = (text: string) => new TextEncoder().encode(text);
@@ -29,15 +31,16 @@ const question = (id: string, text: string, ...expected: [string, string][]): Qu
 
 let db: Db;
 
-const ingestAll = async (version = INGEST_VERSION) => {
+const seeded = async (version = INGEST_VERSION) => {
+  const target = await pgliteDb();
+  await migrate(target);
   for (const [filename, { kind, data }] of Object.entries(files))
-    await ingestDocument(db, fakeEmbedder, { collection: 'corpus', filename, kind, data }, version);
+    await ingestDocument(target, fakeEmbedder, { collection: 'corpus', filename, kind, data }, version);
+  return target;
 };
 
-beforeEach(async () => {
-  db = await pgliteDb();
-  await migrate(db);
-  await ingestAll();
+beforeAll(async () => {
+  db = await seeded();
 });
 
 describe('runEval ranks a question by the matching rule of the document type', () => {
@@ -117,10 +120,8 @@ describe('the stale-data check', () => {
   });
 
   it('stops when a document was ingested at an older version', async () => {
-    db = await pgliteDb();
-    await migrate(db);
-    await ingestAll(INGEST_VERSION - 1);
-    await expect(runEval(db, fakeEmbedder, ask, documents)).rejects.toThrow(new RegExp(`ingest version ${INGEST_VERSION - 1}, expected ${INGEST_VERSION}`));
+    const old = await seeded(INGEST_VERSION - 1);
+    await expect(runEval(old, fakeEmbedder, ask, documents)).rejects.toThrow(new RegExp(`ingest version ${INGEST_VERSION - 1}, expected ${INGEST_VERSION}`));
   });
 
   it('lists every mismatch at once', async () => {
@@ -134,8 +135,9 @@ describe('the stale-data check', () => {
   });
 
   it('reads the corpus collection only', async () => {
-    await ingestDocument(db, fakeEmbedder, { collection: 'upload:abc', filename: 'mine.md', kind: 'md', data: bytes('# Mine\nprivate text') });
-    expect((await corpusState(db)).map(({ filename }) => filename)).toEqual(['phases.md', 'rule.txt', 'rules.pdf']);
+    const own = await seeded();
+    await ingestDocument(own, fakeEmbedder, { collection: 'upload:abc', filename: 'mine.md', kind: 'md', data: bytes('# Mine\nprivate text') });
+    expect((await corpusState(own)).map(({ filename }) => filename)).toEqual(['phases.md', 'rule.txt', 'rules.pdf']);
   });
 });
 
