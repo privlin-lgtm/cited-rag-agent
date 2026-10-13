@@ -94,9 +94,45 @@ describe('runAgent', () => {
     const sources = searchResults(calls[2]).map(({ source }) => source);
     expect(sources).toEqual([...searchResults(calls[1]).map(({ source }) => source), ...sources.slice(searchResults(calls[1]).length)]);
     expect(new Set(sources).size).toBeGreaterThan(1);
-    expect(breakpoints(calls[1])).toHaveLength(1);
-    expect(breakpoints(calls[2])).toHaveLength(2);
+    expect(breakpoints(calls[1])).toHaveLength(0);
+    expect(breakpoints(calls[2])).toHaveLength(1);
     expect(ofType(events, 'usage')).toHaveLength(3);
+  });
+
+  it('sends no cache_control in a two-call run, because only a third call would read the first round', async () => {
+    const { model, calls } = scripted((so) =>
+      so.length === 1 ? reply([toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 2 })], 'tool_use') : reply([text('Cancel within 30 minutes.')], 'end_turn'),
+    );
+    await run(model);
+    expect(calls).toHaveLength(2);
+    expect(JSON.stringify(calls.map(({ messages }) => messages))).not.toContain('cache_control');
+  });
+
+  it('puts the breakpoint on the last block of the second round in a three-call run, and none on the first', async () => {
+    const { model, calls } = scripted((so) =>
+      so.length === 1
+        ? reply([toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 2 })], 'tool_use')
+        : so.length === 2
+          ? reply([toolUse('t2', 'keyword_search', { terms: '1005.33', k: 2 })], 'tool_use')
+          : reply([text('Done.')], 'end_turn'),
+    );
+    await run(model);
+    expect(calls).toHaveLength(3);
+    expect(breakpoints(calls[1])).toHaveLength(0);
+    const lastBlocks = toolResults(calls[2]).map((result) => (Array.isArray(result.content) ? result.content : []).at(-1));
+    expect(lastBlocks).toHaveLength(2);
+    expect(lastBlocks[0]).not.toHaveProperty('cache_control');
+    expect(lastBlocks[1]).toMatchObject({ cache_control: { type: 'ephemeral' } });
+    expect(breakpoints(calls[2])).toHaveLength(1);
+  });
+
+  it('keeps the two most recent breakpoints from the second round on', async () => {
+    const search = (id: string) => toolUse(id, 'search_documents', { query: 'cancel a remittance transfer', k: 2 });
+    const { model, calls } = scripted((so) => (so.length < 4 ? reply([search(`t${so.length}`)], 'tool_use') : reply([text('Done.')], 'end_turn')));
+    await run(model);
+    expect(calls).toHaveLength(4);
+    const marked = toolResults(calls[3]).map((result) => (Array.isArray(result.content) ? result.content : []).some((block) => 'cache_control' in block && block.cache_control));
+    expect(marked).toEqual([false, true, true]);
   });
 
   it('keeps tool results in tool_use order when the tools finish in another order', async () => {

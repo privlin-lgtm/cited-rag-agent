@@ -158,7 +158,7 @@ export const runAgent = async (deps: AgentDeps, question: string, emit: (event: 
 
     const lastResult = toolResults[toolResults.length - 1];
     const lastBlock = (lastResult.content as (SearchResultBlockParam | TextBlockParam)[]).at(-1);
-    if (lastBlock) {
+    if (lastBlock && round > 0) {
       lastBlock.cache_control = { type: 'ephemeral' };
       breakpoints.push(lastBlock);
       if (breakpoints.length > 2) delete breakpoints.shift()?.cache_control;
