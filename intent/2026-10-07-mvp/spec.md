@@ -1,6 +1,8 @@
 # Spec: cited-rag-agent  (from intent.md, 2026-10-07) · Status: approved
 Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`); references such as (b.3) point to its items. Decisions D1–D6 at the end are confirmed by approving this spec.
 Revised 2026-10-08 with the first-cut fixes (`fix/first-cut`): features 2, 7, 9, 10 and 13, and Screens / routes.
+Revised 2026-10-08 with the second validate pass polish (`fix/sandbox-polish`): features 8, 9 and 10.
+Revised 2026-10-13 with M4 (`m4-evals`): features 3, 6, 8, 11 and 13, Screens / routes and AI features.
 
 ## Stack
 - **App:** Next.js 16.4.0 (App Router, Route Handlers on the Node runtime), React 19.3.0, TypeScript `~5.9.3`, Tailwind CSS 4 with a few shadcn/ui components. Every version is pinned exactly except TypeScript (`~5.9.3`, patch updates only), and the lockfile is committed. Lint runs through the ESLint CLI, since `next lint` is gone in 16. Hosted on Vercel (Paul's Pro account), with functions in `fra1`.
@@ -33,9 +35,10 @@ Revised 2026-10-08 with the first-cut fixes (`fix/first-cut`): features 2, 7, 9,
    - **Scanned PDFs:** a PDF that yields no text is rejected with a message saying OCR is out of scope.
 3. **Ingest.**
    - **Extraction:** PDFs through `unpdf` `extractText(data, { mergePages: false })`, which returns per-page text and `totalPages`; add `serverExternalPackages: ['unpdf']` only if the bundler needs it. Markdown is split by headings, plain text by paragraphs.
-   - **Cleanup (ingest version 2):**
+   - **Cleanup (ingest version 3):**
      - Markdown lines that hold only an image (also when wrapped in a link) are dropped, and a section left with only headings merges into the next one, as a heading-only section always does.
-     - In a PDF, take the first three and last three non-empty lines of every page, collapse their whitespace and replace each run of digits with `#`. A line found that way on at least a third of the pages, and on at least three, is a running header or footer, and it is dropped wherever it appears on a page, because extraction sometimes puts a header mid-page. (One half of the pages missed PSD2, whose odd and even pages carry two mirrored headers.)
+     - In a Markdown heading path, a heading whose text equals its parent's is not repeated, so the generic transaction patterns page, whose top heading and next heading are both "Generic Transaction Patterns", has locators that start `§ Generic Transaction Patterns › Preface`, not `§ Generic Transaction Patterns › Generic Transaction Patterns › …`.
+     - In a PDF, take the first five and last five non-empty lines of every page, collapse their whitespace and replace each run of digits with `#`. A line found that way on at least a third of the pages, and on at least three, is a running header or footer, and it is dropped wherever it appears on a page, because extraction sometimes puts a header mid-page. (One half of the pages missed PSD2, whose odd and even pages carry two mirrored headers.) Five lines, not three, because the exam procedures PDF has a five-line running header on every page, and a three-line window left its last two lines at the top of passages; the five-line window changes nothing in the CFPB guide and keeps all six PSD2 lines that start "Article 97".
      - Tables stay as extracted; the eval decides whether they need more.
    - **Chunking:** paragraphs are packed into chunks of about 400 estimated tokens, with a ceiling of 600 and an overlap of one paragraph (capped at about 80 tokens). A chunk never crosses a PDF page.
      - **Token estimate:** `Math.ceil(chars / 4)`. The ceiling sets retrieval granularity, not the embedder's limit (b.7).
@@ -67,7 +70,7 @@ Revised 2026-10-08 with the first-cut fixes (`fix/first-cut`): features 2, 7, 9,
      - `list_documents()`: what is in scope.
    - **Tool results:**
      - The first three tools return only `search_result` blocks, one per chunk. Each block's `source` is `chunk:<id>`, its title is `<file> · <locator>`, its `content` is the chunk's sentence blocks, and citations are enabled.
-     - `cache_control` goes on the last block of each round's last tool result.
+     - `cache_control` goes on the last block of each round's last tool result from round 2 on, and only the two most recent breakpoints stay marked. The first round's results carry none: most questions make two model calls, so nothing would read a breakpoint on the first round, and a cache write costs 1.25× input against 0.1× for a read, which pays only when a next call happens more than about 28% of the time (about 1 in 7 questions makes a third call).
      - An empty result is a plain-text tool result: "No matching passages."
      - `list_documents` returns plain text only. A tool result never mixes `search_result` blocks with text blocks.
    - **Rounds:** at most 6 tool rounds. The call after round 6 sends `tool_choice: { type: "none" }`. Forced tool use (`any` or `tool`) returns a 400 on Sonnet 5.5, so it is never sent.
@@ -103,7 +106,7 @@ Revised 2026-10-08 with the first-cut fixes (`fix/first-cut`): features 2, 7, 9,
      - File and locator come from the database, never from the model's text.
      - A chunk cited through several indices is shown once, with all its cited sentences highlighted.
      - A failed citation shows in red as "unchecked", never as checked.
-     - The answer header reads "N of M citations checked". An answer that cites nothing (a refusal, or a plain "the documents don't cover this") reads "no citations" in a neutral badge; red is kept for answers whose citations were given and none passed the check.
+     - The answer header reads "N of M citations checked". An answer that cites nothing (such as a plain "the documents don't cover this") reads "no citations" in a neutral badge; red is kept for answers whose citations were given and none passed the check. A refusal by the model (stop reason `refusal`) shows only "Claude declined to answer this question.", with no badge.
 9. **Excerpts.** Beside the answer, each cited chunk shows its file, its locator and the chunk text with the cited sentences highlighted, plus a link to the source document.
    - **Markdown documents:** for a file whose name ends in `.md`, the excerpt renders inline Markdown for display only: `**bold**`, `` `code` `` (also inside bold), `[text](target)` as its text, `<br />` as a line break, `<sup>…</sup>` as superscript with a link inside shown as its text, and a heading marker (`#` to `######`) at the start of a block dropped. The highlighted blocks, the stored text and the citation check are unchanged. Other files show the stored text as it is.
 10. **Abuse and spend limits** (b.8, c).
@@ -123,10 +126,18 @@ Revised 2026-10-08 with the first-cut fixes (`fix/first-cut`): features 2, 7, 9,
     - **IP:** the first address in `x-forwarded-for`, which Vercel sets. The hash is HMAC-SHA256 keyed with `IP_HASH_SECRET`, first 16 hex characters.
     - **Messages:** each refusal says which limit was hit and when it resets.
 11. **Evals** (M4, b.9).
-    - **Questions:** `evals/questions.json` holds 12 to 15 questions, each with the set of (filename, locator) pairs that answer it, written after reading the ingested corpus.
-    - **Hit:** a question is a hit at k when any of the top k chunks from `search_documents` (semantic only, no document filter) has a pair in its expected set.
-    - **Metrics:** `npm run eval` reports hit@1, hit@3 and hit@5, plus MRR from the rank of the first matching chunk. `keyword_search` isn't scored in M4.
-    - **CI:** runs on every PR that touches ingest, retrieval, prompts or the eval set. Results go in the job summary, and the job fails below a hit@5 threshold set from the first honest run.
+    - **Questions:** `evals/questions.json` holds 12 to 15 questions (14 at M4), each with the set of (filename, locator) pairs that answer it, written after reading the ingested corpus.
+    - **Matching:** a retrieved chunk matches an expected pair when the filename is equal and the locator matches by the document's kind:
+      - PDF: the page matches exactly.
+      - Markdown: the retrieved heading path equals the expected one or sits under it.
+      - Text: the expected entry is a line range, and any retrieved chunk whose range overlaps it matches. Ranges include their end lines, so two neighbouring chunks that share a boundary paragraph both match.
+    - **Hit:** a question is a hit at k when any of the top k chunks from semantic search (the `search_documents` query over every corpus document, no keyword search) matches a pair in its expected set.
+    - **Metrics:** `npm run eval` reports hit@1, hit@3 and hit@5, plus MRR over the top 10: the mean of 1 ÷ the rank of the first matching chunk, with 0 for a question with no match in the top 10. `keyword_search` isn't scored in M4.
+    - **Run:** `npm run eval` first checks that the database holds every manifest document in the corpus collection at the current `INGEST_VERSION` with the manifest's SHA-256, and stops with the mismatch otherwise, so it never scores stale data. It then embeds all questions in one Voyage call and runs the search for each with k = 10. It prints the rank of the first match and the top 3 hits of every question, then the metrics and the Voyage tokens used, and writes the same as Markdown tables to the job summary when `GITHUB_STEP_SUMMARY` is set.
+    - **Threshold:** `evals/threshold.json` holds the hit@5 count one question below the first honest run (13 of 14 hits gave 12 of 14), with the date and the commit it came from. `npm run eval` exits non-zero when hit@5, compared as a fraction, falls below it, and only reports when the file is absent. The file changes only in a PR that Paul merges, whose body says why.
+    - **CI:** `.github/workflows/evals.yml` runs on `workflow_dispatch` and on pull requests that touch `lib/ingest/**`, `lib/search.ts`, `lib/embed.ts`, `lib/agent/**`, `corpus/**`, `evals/**`, `db/migrations/**`, `scripts/eval.ts`, `scripts/ingest-corpus.ts` or the workflow itself. The job starts a fresh pgvector service (Postgres 18, pgvector 0.8.6, pinned by digest), migrates it, ingests the corpus into it and runs the eval, so it tests ingest and never writes to Sandbox. Results go in the job summary, and the job fails below the threshold.
+    - **Secret:** the job needs the repository secret `VOYAGE_API_KEY`. Its first step fails the job when the secret is empty, which is always the case on Dependabot and fork pull requests, with the message to run the eval by hand; the job never skips.
+    - **Cost:** a run spends the Voyage tokens of one corpus ingest and one query call, measured at 178,185 and 267 tokens. That is $0 inside the account's 200M free tokens, and a run makes no Anthropic calls.
 12. **Environments** (M5, b.11, b.12, D3).
     - **Branches:** `sandbox` → `qa` → `master`. Feature PRs merge into `sandbox`, and promotion is by PR.
     - **Databases:** one Neon project per environment (D1).
@@ -140,7 +151,7 @@ Revised 2026-10-08 with the first-cut fixes (`fix/first-cut`): features 2, 7, 9,
 13. **Home page demo aids.** Four example questions under the input; a footer with the model, tokens, cost and latency of the last answer; and an environment badge from `APP_ENV`.
     - **Header:** a link to the GitHub repository, and one line under the description: "Claude searches the documents with tools and cites passages; each citation is checked against the stored text before it is marked checked."
     - **Footer links:** the Intent, Spec and Plan links point at `blob/HEAD/intent/2026-10-07-mvp/…`, so they follow the repository's default branch.
-    - **Page metadata:** `app/icon.svg` (an indigo rounded square with a check mark) is the favicon, so `/favicon.ico` is never requested; the layout carries a description and Open Graph tags (title, description, type website), with no image.
+    - **Page metadata:** `app/icon.svg` (an indigo rounded square with a check mark) is the favicon, so the page never requests `/favicon.ico` (a direct request still answers 404); the layout carries a description and Open Graph tags (title, description, type website), with no image.
 14. **Preview access** (c, D5). Vercel Deployment Protection is off for this project, so the Sandbox preview opens at its stable branch URL without a Vercel login. The limits in feature 10 protect the keys.
 
 ## Screens / routes
@@ -151,7 +162,7 @@ Revised 2026-10-08 with the first-cut fixes (`fix/first-cut`): features 2, 7, 9,
 - `GET /api/documents`: the corpus plus this session's uploads.
 - `DELETE /api/documents/:id`: the session's own uploads only.
 - `GET /api/health`: `{ env, database, lastMigration }`, where `database` is the first 12 hex characters of the SHA-256 of `DATABASE_URL`'s host name, so environments are told apart without publishing the host.
-- `GET /api/cron/cleanup`: a Vercel Cron job, run hourly, that deletes uploads older than 24 h and expired limit windows. It is protected by `CRON_SECRET`. Vercel calls cron jobs on the production deployment only, so on Sandbox the job is triggered hourly (minute 17) by the GitHub Actions workflow `cleanup.yml`, which sends `SANDBOX_CRON_SECRET` as the bearer token and writes the JSON response to the job summary. GitHub runs scheduled workflows from the default branch only, so the schedule starts once `sandbox` is the default branch. M5 adds QA to the workflow.
+- `GET /api/cron/cleanup`: a Vercel Cron job, run hourly, that deletes uploads older than 24 h and expired limit windows. It is protected by `CRON_SECRET`. Vercel calls cron jobs on the production deployment only, so on Sandbox the GitHub Actions workflow `cleanup.yml` calls the route, sending `SANDBOX_CRON_SECRET` as the bearer token and writing the JSON response to the job summary. It is scheduled for minute 17 of every hour, but GitHub delays and skips scheduled runs: from 8 to 11 Oct it ran every 3 to 8 hours. An upload can outlive its 24 hours by a few hours; no visitor sees it, because the session cookie that owns it expires 24 hours after it is set. GitHub runs scheduled workflows from the default branch only, so the schedule starts once `sandbox` is the default branch. M5 adds QA to the workflow.
 
 ## Schema
 Every column below serves a feature above; nothing is "just in case".
@@ -208,11 +219,8 @@ create table usage_windows (
 - **Below threshold:** the citation check is pass or fail, with no confidence band. Failures show as "unchecked", and an answer with no checked citation says so at the top.
 - **When the answer isn't in the documents:** the agent says it couldn't find it, and the answer still shows the steps it took.
 - **Fallback:** if the Anthropic API fails, the route returns the error and the top retrieved excerpts, labelled "no answer generated". If Voyage fails, see feature 6.
-- **Cost per question** (estimate, to be replaced by measured numbers at the first cut):
-  - about 15 to 25K input tokens across 3 to 4 calls, plus about 800 output tokens, which comes to roughly $0.04 to $0.06;
-  - prompt caching on the growing prefix should take that to about $0.02 to $0.03;
-  - `between_tools` keeps thinking tokens to the short progress updates.
-- **Ceilings:** the app's daily budget of $1.00 is about 30 to 50 questions a day. The Anthropic workspace's monthly limit of $20 is the hard stop (D2).
+- **Cost per question** (measured): the 12 M3 runs of the four example questions averaged $0.0365 and 7.8 s; three runs on 8 Oct averaged $0.0374 and 7.7 s. Most questions make two model calls (one tool round with two searches, then the answer); about 1 in 7 makes three. A question holds $0.10 of the daily budget while it runs (feature 10).
+- **Ceilings:** the app's daily budget of $1.00 is about 24 questions a day at the measured cost, because the last $0.10 is held for a question in progress. The Anthropic workspace's monthly limit of $20 is the hard stop (D2).
 - **Embeddings:** the corpus is about 0.19M Voyage tokens once (185,476 measured in M2), at $0 inside Voyage's 200M free tokens. Questions cost a few hundred tokens each.
 
 ## Out of scope
