@@ -1,0 +1,106 @@
+name: Release
+
+on:
+  push:
+    branches: [sandbox, qa, master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment:
+      name: ${{ github.ref_name == 'master' && 'production' || github.ref_name }}
+      url: ${{ steps.deploy.outputs.url }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Migrate
+        env:
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: |
+          status=0
+          npm run --silent migrate > "$RUNNER_TEMP/migrate.txt" || status=$?
+          cat "$RUNNER_TEMP/migrate.txt"
+          {
+            echo '### Migrate'
+            echo '```'
+            cat "$RUNNER_TEMP/migrate.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - name: Ingest the corpus
+        env:
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+        run: |
+          status=0
+          npm run --silent ingest:corpus > "$RUNNER_TEMP/ingest.txt" || status=$?
+          cat "$RUNNER_TEMP/ingest.txt"
+          {
+            echo '### Ingest'
+            echo '```'
+            cat "$RUNNER_TEMP/ingest.txt"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+      - name: Deploy
+        id: deploy
+        if: github.ref_name == 'master'
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+        run: |
+          npx --yes vercel@63.1.2 deploy --prod --yes --token "$VERCEL_TOKEN" > "$RUNNER_TEMP/deployment-url.txt"
+          url=$(tail -n 1 "$RUNNER_TEMP/deployment-url.txt")
+          case "$url" in
+            https://*) ;;
+            *)
+              echo '::error::The Vercel CLI did not print a deployment URL'
+              exit 1
+              ;;
+          esac
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+      - name: Check the deployment
+        if: github.ref_name == 'master'
+        env:
+          DEPLOYMENT_URL: ${{ steps.deploy.outputs.url }}
+        run: |
+          migrations=(db/migrations/*.sql)
+          newest=$(basename "${migrations[-1]}")
+          {
+            echo '### Deployment'
+            echo "$DEPLOYMENT_URL"
+          } >> "$GITHUB_STEP_SUMMARY"
+          deadline=$((SECONDS + 120))
+          until health=$(curl --fail --silent --max-time 10 "${DEPLOYMENT_URL}/api/health"); do
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo '::error::/api/health did not answer within 2 minutes'
+              exit 1
+            fi
+            sleep 5
+          done
+          {
+            echo '```json'
+            echo "$health"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [ "$(jq -r .env <<< "$health")" != production ]; then
+            echo '::error::/api/health does not report production'
+            exit 1
+          fi
+          if [ "$(jq -r .lastMigration <<< "$health")" != "$newest" ]; then
+            echo "::error::/api/health does not report the newest migration, $newest"
+            exit 1
+          fi
