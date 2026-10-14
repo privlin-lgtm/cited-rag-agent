@@ -11,7 +11,7 @@ const MARKER = /^(?:[•●▪]|[-–]\s|\d{1,3}[.)]\s|\(?[a-z0-9]{1,3}\)\s)/;
 const FENCE = /^\s*(?:```|~~~)/;
 const HEADING = /^#{1,6}\s/;
 const IMAGE_ONLY = /^\s*(?:\[\s*)?!\[[^\]]*\]\([^)]*\)(?:\s*\]\([^)]*\))?\s*$/;
-const EDGE_LINES = 3;
+const EDGE_LINES = 5;
 const FRONT_MATTER = /^---\n(?:[A-Za-z_][\w-]*:.*\n|[ \t].*\n|-\s.*\n|\n)*?---\n/;
 
 const clean = (text: string) => text.replaceAll('\0', '').replace(/\r\n?/g, '\n');
@@ -56,6 +56,9 @@ const pdfParagraphs = (lines: string[]): Paragraph[] => {
 
 const headingText = (raw: string) => raw.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1').replace(/[`*_]/g, '').trim();
 
+const headingPath = (path: string[]) =>
+  path.filter((segment, i, all) => segment && segment !== all.slice(0, i).findLast(Boolean)).join(' › ') || 'Preamble';
+
 const markdownParts = (source: string): Part[] => {
   const path: string[] = [];
   const parts: Part[] = [];
@@ -63,7 +66,7 @@ const markdownParts = (source: string): Part[] => {
   let fenced = false;
   const flush = () => {
     const paragraphs = blocks(buffer, true);
-    if (paragraphs.length) parts.push({ locator: `§ ${path.filter(Boolean).join(' › ') || 'Preamble'}`, paragraphs });
+    if (paragraphs.length) parts.push({ locator: `§ ${headingPath(path)}`, paragraphs });
     buffer = [];
   };
   for (const line of source.replace(FRONT_MATTER, '').split('\n')) {

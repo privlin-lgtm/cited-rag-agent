@@ -13,7 +13,7 @@ An agent that answers questions about a pack of cross-border payments documents 
 3. For each cited sentence block the check confirms that the index is in range, that the result's chunk exists and belongs to a document in scope, and that the block text equals the block at the same position when the stored chunk is split again and appears in the stored chunk text. It compares block by block and never uses `cited_text` as one string.
 4. The file and page shown come from the database row, never from the model's text. A citation that fails shows as "unchecked".
 
-**What "checked" proves:** the cited sentences are in the stored text of a passage retrieved in that run. **What it does not prove:** that the sentence supports the claim it is attached to. The highlighted excerpt is there for a reader to judge that.
+**What "checked" proves:** the cited sentences are in the stored text of a passage retrieved in that run. **What it does not prove:** that the sentence supports the claim it is attached to, or that the passage answers the question asked. The highlighted excerpt is there for a reader to judge that, and the retrieval evals below measure how often the passages that answer a question are found.
 
 ## The agent loop
 
@@ -57,9 +57,21 @@ Nine documents, committed under `corpus/files/` with their sources, licences and
 
 The Python prototype this repo started as is kept at the tag `python-prototype`.
 
+## Retrieval evals
+
+`npm run eval` scores semantic search on 14 questions in [evals/questions.json](evals/questions.json). Each question lists every file and page or heading whose text answers it, written after reading the ingested documents. A question is a hit at k when one of the top k passages is one of those. Two of the questions are answered only by a table in the CFPB guide, and several use plain words that the answering passage does not.
+
+First honest run, on the Sandbox corpus, 13 Oct 2026:
+
+| hit@1 | hit@3 | hit@5 | MRR (top 10) |
+|---|---|---|---|
+| 9/14 | 11/14 | 13/14 | 0.750 |
+
+The check fails when hit@5 falls below 12 of 14 ([evals/threshold.json](evals/threshold.json), one question under the first run). [The evals workflow](.github/workflows/evals.yml) ingests the corpus into a fresh pgvector service, so it tests ingest as well as search, and runs on pull requests that touch ingest, search, the agent, the corpus or the eval set. One run spends about 178,000 Voyage tokens (178,185 to ingest the corpus and 267 for the questions), which is free inside Voyage's 200M free tokens, and makes no Anthropic calls.
+
 ## Status
 
-First cut, running on Sandbox. Next: retrieval evals in CI (M4), then the QA and production environments (M5).
+First cut on Sandbox, with retrieval evals in CI. Next: the QA and production environments (M5).
 
 ## Local secrets
 

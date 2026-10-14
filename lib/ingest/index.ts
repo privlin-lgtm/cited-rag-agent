@@ -4,7 +4,7 @@ import type { Embedder } from '../embed';
 import { chunkParts, estimateTokens } from './chunk';
 import { extract, type Kind } from './extract';
 
-export const INGEST_VERSION = 2;
+export const INGEST_VERSION = 3;
 const INSERT_BATCH = 100;
 
 export type IngestInput = { collection: string; filename: string; kind: Kind; data: Uint8Array; beforeEmbed?: (estimatedTokens: number) => Promise<void> };

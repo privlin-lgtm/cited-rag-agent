@@ -12,9 +12,9 @@ Run from the repo root.
 - `npm run migrate`: applies pending `db/migrations/*.sql` to Sandbox through `.env.local`. Healthy: `applied 0001_init.sql` or `nothing to apply`.
 - `npm run smoke:sql`: runs every statement the app and its scripts issue, through postgres.js on Sandbox, in one transaction that is always rolled back. Run it after any change to SQL, because PGlite hides driver differences. Healthy: one line per statement with its row count, then `rolled back; nothing left behind`.
 - `npm run corpus:fetch`: downloads the corpus into `corpus/files/` and rewrites `corpus/manifest.json`. Needs the network, not `.env.local`. Healthy: one line per document, then `9 documents, 3559380 bytes (3.39 MB)`. A 403 or an HTML answer fails with the URL.
-- `npm run ingest:corpus`: ingests the manifest into the database in `.env.local` (Sandbox). A first run of the nine documents takes about a minute, and a changed `INGEST_VERSION` re-ingests all of them. Healthy: one line per document, then `9 ingested, 0 skipped`, and `0 ingested, 9 skipped` on a rerun.
+- `npm run ingest:corpus`: ingests the manifest into the database in `.env.local` (Sandbox). A first run of the nine documents takes about a minute, and a changed `INGEST_VERSION` re-ingests all of them. `INGEST_VERSION` is 3. Healthy: one line per document, then `9 ingested, 0 skipped`, and `0 ingested, 9 skipped` on a rerun.
 - `npx tsx --env-file-if-exists=.env.local scripts/retrieval-check.ts`: embeds three questions with Voyage and prints the top 3 semantic and keyword hits for each, then two table chunks from the CFPB guide. Healthy: `query embeddings used N Voyage tokens`, then three blocks of hits.
-- `npm run eval`: arrives in M4. It does not exist yet.
+- `npm run eval`: scores semantic retrieval on the 14 questions in `evals/questions.json` against the database in `.env.local` (Sandbox), with one Voyage call of about 270 tokens and no Anthropic call. It stops with the mismatch when the database does not hold every manifest document at the current `INGEST_VERSION` with the manifest hash (run `npm run ingest:corpus` first), and it exits 1 when hit@5 falls below `evals/threshold.json`. Healthy: one block per question, then hit@1, hit@3, hit@5 and MRR, and `hit@5 13/14 meets the threshold 12/14 (set 2026-10-13 from f461ae3737ed19fab28ffbc63243440dc6150224)`.
 
 ## Before reporting done
 Run lint, typecheck, test and build, and paste the output. Fix the code, not the test.
@@ -43,7 +43,7 @@ Never read `.env`, `.env.local` or `.env.*.local`. `.env.local` holds Sandbox cr
 - A question holds $0.10 of the daily budget while it runs (`reserveBudget`, `releaseBudget` in `lib/limits.ts`). Keep every exit of the run in `handleAsk` inside its `finally`, so the hold is always released.
 - `embed:tokens` is debited by the `onBatch` callback that `debited()` passes to the embedder, one Voyage response at a time. Do not debit again from a report's `tokens`.
 - `handleAsk` writes one `console.info` JSON line per run. Never put the question, document ids, the session id or the address hash in it.
-- `.github/workflows/cleanup.yml` calls the Sandbox cleanup route hourly. GitHub runs scheduled workflows from the default branch only, so it starts once `sandbox` is the default branch.
+- `.github/workflows/cleanup.yml` calls the Sandbox cleanup route; it is scheduled hourly, and GitHub runs it every few hours. GitHub runs scheduled workflows from the default branch only, so it starts once `sandbox` is the default branch.
 
 ## Subagents
 Call `verifier` before opening any PR and paste its report in the PR. Call `architect` when the same test fails two cycles running.

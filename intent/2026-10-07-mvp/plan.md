@@ -9,14 +9,14 @@ Times are Israel time. The build runs in Claude Code on Paul's machine, from the
 | M0 | Intent, spec, plan, plus the build session's review of the spec and plan (`review-2026-10-07.md`) and these revisions; gate commits on `flow/mvp` | `flow/mvp` → `master` (PR #9) | Wed 7 Oct 12:00–14:00 | **Accept the intent; approve the spec (with decisions D1–D6) and the plan; merge** |
 | M1 | Scaffold and guardrails (workflow Phase 3a): the `sandbox` branch; the Python code leaves the tree; Next.js app; one command each for lint, typecheck, test and build; the `Db` interface with both drivers; `0001_init.sql` and `scripts/migrate.ts`; `/api/health`; the agent files in the appendix; CI; Dependabot | `m1-scaffold` → `sandbox` | Wed 14:00–16:30 | **Manual approvals until the hooks are proven; review and merge by 17:30, then close Dependabot PRs #1–#8 (or let the M2 session do it)** |
 | S1 | Accounts and keys: Neon Sandbox project; Anthropic workspace (limit $20) and key; Voyage key (no card); Vercel project (region `fra1`, protection off, env vars); `.env.local` copied into the secrets archive | n/a | Wed 16:30–17:45, or 20:00 before M2 | **About 30 min, steps from the planning session** |
-| M2 | The corpus pack committed with manifest and hashes; extractors, chunker, sentence splitter, Voyage client, versioned ingest; semantic and keyword search; the real corpus ingested into Sandbox | `m2-ingest` → `sandbox` | Wed 7 Oct, about 16:30–18:00 (it ran in the afternoon, before class) | **Start the session, approve its plan, merge** |
+| M2 | The corpus pack committed with manifest and hashes; extractors, chunker, sentence splitter, Voyage client, versioned ingest; semantic and keyword search; the real corpus ingested into Sandbox | `m2-ingest` → `sandbox` | Wed 7 Oct, about 16:30–18:00 (it ran in the afternoon; there was no class) | **Start the session, approve its plan, merge** |
 | M3 | Agent loop (Fable designs it in plan mode, Sonnet builds it), NDJSON stream, citation check, three-column UI, example questions, limits and budgets, upload, cleanup cron, environment badge; deployed to the Sandbox preview | `m3-agent` → `sandbox` | Thu 8 Oct 08:30–12:30 | **Start the session, review, merge** |
 | ★ | **FIRST CUT:** M1–M3 on the Sandbox preview URL with the real corpus | | **Thu 8 Oct ~13:00** | **Walk-through 13:00–16:00 with same-day fixes; apply Thu evening** |
 | Fix | First-cut hardening and portfolio quick wins, from the walk-through and the validate review: a $0.10 budget reservation per question, a 100,000-token upload cap with per-batch embedding debits, a cross-site write guard, one server log line per run, interface fixes (status line, rendered Markdown in excerpts, labelled scores, header and footer links, favicon, Open Graph tags), the README, and an hourly Sandbox cleanup workflow | `fix/first-cut` → `sandbox` | Thu 8 Oct | **Review and merge; switch the default branch to `sandbox`; run `cleanup.yml` once by hand** |
 | Polish | Second validate pass fixes: a neutral "no citations" badge, AnswerPanel tests (T5), <sup> in Markdown excerpts, the README spend line, and a concurrency group in cleanup.yml that re-registers its schedule | `fix/sandbox-polish` → `sandbox` | Fri 9 Oct | **Review and merge; confirm a scheduled cleanup run** |
 | M4 | Eval set (12–15 questions), `npm run eval` (hit@1/3/5, MRR), CI job with a pgvector service, job-summary table, threshold set from the first run | `m4-evals` → `sandbox` | Mon 12 Oct | **About 1.5 h of sessions plus review** |
-| M5 | Neon QA and production projects; GitHub Environments with production gated on Paul's approval; Vercel env scoping and `git.deploymentEnabled.master: false`; `pipeline.yml` (migrate, then ingest; production migrate, then deploy), plus QA in `cleanup.yml`, the GitHub Actions trigger for `/api/cron/cleanup` that the fix PR adds for Sandbox, because Vercel runs cron jobs on production only; first promotion sandbox → qa → master | `m5-environments` → `sandbox`, then promotion PRs | Mon 12 – Tue 13 Oct | **About 40 min of setup, plus the approvals in each promotion** |
-| M6 | README (architecture, running locally, "Local secrets" with `<!-- yanshuf-secrets -->`), demo script, responsive and Lighthouse pass, Claude PR review (`/install-github-app`) | `m6-readme` → `sandbox` → promotion | Tue 13 – Wed 14 Oct | **Final walk-through Wed 14 Oct** |
+| M5 | Neon QA and production projects; GitHub Environments with production gated on Paul's approval; Vercel env scoping and `git.deploymentEnabled.master: false`; `pipeline.yml` (migrate, then ingest; production migrate, then deploy), plus QA in `cleanup.yml`, the GitHub Actions trigger for `/api/cron/cleanup` that the fix PR adds for Sandbox, because Vercel runs cron jobs on production only; first promotion sandbox → qa → master; before the first promotion, a build-time env check (validate E4) and security headers (validate S3: `X-Content-Type-Options: nosniff`, `frame-ancestors` or `X-Frame-Options`, `Referrer-Policy`; a CSP only with a test); the Sandbox stable URL keeps working throughout, because Paul's job applications link to it | `m5-environments` → `sandbox`, then promotion PRs | Mon 12 – Tue 13 Oct | **About 40 min of setup, plus the approvals in each promotion** |
+| M6 | README (architecture, running locally, "Local secrets" with `<!-- yanshuf-secrets -->`), demo script, responsive and Lighthouse pass, Claude PR review (brought forward to PR #15; see Model split); from the validate review: stop the agent when the visitor disconnects (E2), an explicit error for a `tool_use` stop with no tool block (E7), render or strip the model's headings and tables in the answer (E10), type `sessionId({ create: true })` as a string (E11), and an Excerpts message when an answer cites nothing | `m6-readme` → `sandbox` → promotion | Tue 13 – Wed 14 Oct | **Final walk-through Wed 14 Oct** |
 
 The full set is due Wed 14 Oct, with Thu 15 as buffer. Sunday 11 is TriviaFoundry's launch, so nothing is planned here that day.
 
@@ -31,13 +31,13 @@ Until the first promotion in M5, `master` holds only the chain. The first cut li
   - `app/api/{ask,upload,documents,documents/[id],health,cron/cleanup}/route.ts`
 - **Library:**
   - `lib/{env,db,embed,search,limits,pricing}.ts`
-  - `lib/{corpus,manifest,documents,session,upload,api,deps,run-state,inline-markdown,utils}.ts`, the test helpers `lib/{fake-embedder,test-pdf}.ts` and `lib/agent/test-setup.ts`, and the upload fixture `lib/fixtures/acme-pay-terms.pdf`
+  - `lib/{corpus,manifest,documents,session,upload,api,deps,run-state,inline-markdown,utils,evals}.ts`, the test helpers `lib/{fake-embedder,test-pdf}.ts` and `lib/agent/test-setup.ts`, and the upload fixture `lib/fixtures/acme-pay-terms.pdf`
   - `lib/ingest/{extract,chunk,index}.ts`
   - `lib/agent/{loop,tools,prompt,sentences,citations}.ts`
 - **Data:**
   - `db/migrations/0001_init.sql`
   - `corpus/manifest.json`, `corpus/files/*` (committed), plus the Mojaloop `LICENSE.md` (the repository ships no NOTICE)
-  - `evals/questions.json`
+  - `evals/{questions,threshold}.json`
 - **Scripts:** `scripts/{migrate,corpus-fetch,ingest-corpus,retrieval-check,smoke-sql,eval}.ts`
 - **Pipelines:** `.github/workflows/{ci,cleanup,evals,pipeline}.yml`, `.github/dependabot.yml`
 - **Agent setup:** `AGENTS.md`, `CLAUDE.md`, `REVIEW.md`, `.claude/settings.json`, `.claude/hooks/{no-placeholders,production-gate}.mjs`, `.claude/agents/{verifier,architect}.md`
@@ -61,6 +61,7 @@ From nothing to the spec's four tables:
   - The `verifier` and `architect` subagents carry `model: fable` in their frontmatter, so they run on Fable whenever the Sonnet session calls them. `AGENTS.md` tells the session to call `verifier` before every PR, and `architect` after the same test fails twice.
 
   Fable has its own weekly allowance on Paul's Max plan (separate from the main limit; usage credits off), so splitting the work spreads it across two limits. The constraint block's "Target Model: Fable 5.1" line stays verbatim, and its rules apply to both models.
+- **First-pass PR review:** brought forward from M6 by Paul's decision on 9 Oct. PR #15 (`fix/pr-reviewer`) adds a reviewer on Opus 5.5 that applies REVIEW.md to every non-draft pull request from this repository. The Fable verifier still runs before each PR. Whether the reviewer gets its secret, and its spend, is Paul's decision, made with his other agent settings.
 - **App runtime:** Claude Sonnet 5.5 for the agent ($2 / $10 per M tokens); Voyage `voyage-4` for embeddings.
 
 ## Proof
@@ -87,6 +88,10 @@ From nothing to the spec's four tables:
 - **Fix PR:**
   - Tests show the budget reservation (one of ten simultaneous questions starts with $0.85 spent, and the window holds exactly the actual cost after every kind of run), the upload cap and the per-batch debit, the cross-site guard on each write route, and one log line per run.
   - On the preview, `/api/health` reports Sandbox, a foreign `Origin` and `Sec-Fetch-Site: cross-site` get 403, a 500 KB text upload gets a 413, and the Mojaloop example shows rendered Markdown, labelled scores, the status line and a checked citation with no console error or 404.
+- **Polish PR:**
+  - Tests show the answer header and markers for checked, unchecked and absent citations, a declined answer with no badge, and no `<sup>` text left on any Mojaloop line.
+  - On the preview, an answer that cites nothing shows "no citations" in a neutral badge with no red box.
+  - After the merge, runs labelled Scheduled appear on the cleanup workflow page.
 - **M4:**
   - The job summary shows hit@1, hit@3, hit@5 and MRR.
   - A branch that breaks retrieval on purpose fails the job.
@@ -95,6 +100,7 @@ From nothing to the spec's four tables:
   - Sandbox and QA builds migrate before building.
   - The production pipeline waits for Paul's approval, migrates, then deploys.
   - `/api/health` reports a different database in each environment.
+  - On the production URL itself, before production is called live: `/api/health` shows production's database, one example question gives checked citations and none unchecked, an upload can be asked about and then deleted, and one Vercel cron cleanup run appears in the production logs.
 - **M6:**
   - The README renders on GitHub.
   - Lighthouse scores at least 90 for performance and accessibility on production.
