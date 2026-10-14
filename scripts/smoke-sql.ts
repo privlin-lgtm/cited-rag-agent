@@ -10,7 +10,7 @@ import { addCost, addEmbedTokens, assertEmbedBudget, deleteExpiredWindows, relea
 import { keywordSearch, semanticSearch } from '../lib/search';
 import { ingestUpload } from '../lib/upload';
 import { corpusState } from './eval';
-import { migrate } from './migrate';
+import { isApplied, migrate } from './migrate';
 
 class Rollback extends Error {}
 
@@ -36,6 +36,8 @@ export const steps: SmokeStep[] = [
   async ({ db, step }) => {
     step('migrate: schema_migrations');
     await migrate(db);
+    step('migrate: re-check under the lock');
+    if (!(await isApplied(db, '0001_init.sql'))) throw new Error('0001_init.sql is not recorded');
   },
   async ({ db, step }) => {
     step('health: last migration');
