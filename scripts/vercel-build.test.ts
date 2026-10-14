@@ -74,13 +74,13 @@ describe('checkBuildEnv', () => {
   });
 
   it.each([
-    ['production', production, 'sandbox'],
-    ['production', production, 'qa'],
-    ['qa', qa, 'sandbox'],
-    ['qa', qa, 'production'],
-    ['sandbox', sandbox, 'qa'],
-    ['sandbox', sandbox, 'production'],
-  ])('expects APP_ENV %s and rejects %s', (expected, env, wrong) => {
+    { expected: 'production', env: production, wrong: 'sandbox' },
+    { expected: 'production', env: production, wrong: 'qa' },
+    { expected: 'qa', env: qa, wrong: 'sandbox' },
+    { expected: 'qa', env: qa, wrong: 'production' },
+    { expected: 'sandbox', env: sandbox, wrong: 'qa' },
+    { expected: 'sandbox', env: sandbox, wrong: 'production' },
+  ])('expects APP_ENV $expected and rejects $wrong', ({ expected, env, wrong }) => {
     expect(failure({ ...env, APP_ENV: wrong })).toContain(`APP_ENV must be ${expected}`);
   });
 
