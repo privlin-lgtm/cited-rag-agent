@@ -14,11 +14,11 @@ Times are Israel time. The build runs in Claude Code on Paul's machine, from the
 | ★ | **FIRST CUT:** M1–M3 on the Sandbox preview URL with the real corpus | | **Thu 8 Oct ~13:00** | **Walk-through 13:00–16:00 with same-day fixes; apply Thu evening** |
 | Fix | First-cut hardening and portfolio quick wins, from the walk-through and the validate review: a $0.10 budget reservation per question, a 100,000-token upload cap with per-batch embedding debits, a cross-site write guard, one server log line per run, interface fixes (status line, rendered Markdown in excerpts, labelled scores, header and footer links, favicon, Open Graph tags), the README, and an hourly Sandbox cleanup workflow | `fix/first-cut` → `sandbox` | Thu 8 Oct | **Review and merge; switch the default branch to `sandbox`; run `cleanup.yml` once by hand** |
 | Polish | Second validate pass fixes: a neutral "no citations" badge, AnswerPanel tests (T5), <sup> in Markdown excerpts, the README spend line, and a concurrency group in cleanup.yml that re-registers its schedule | `fix/sandbox-polish` → `sandbox` | Fri 9 Oct | **Review and merge; confirm a scheduled cleanup run** |
-| M4 | Eval set (12–15 questions), `npm run eval` (hit@1/3/5, MRR), CI job with a pgvector service, job-summary table, threshold set from the first run | `m4-evals` → `sandbox` | Mon 12 Oct | **About 1.5 h of sessions plus review** |
-| M5 | Neon QA and production projects; GitHub Environments with production gated on Paul's approval; Vercel env scoping and `git.deploymentEnabled.master: false`; `pipeline.yml` (migrate, then ingest; production migrate, then deploy), plus QA in `cleanup.yml`, the GitHub Actions trigger for `/api/cron/cleanup` that the fix PR adds for Sandbox, because Vercel runs cron jobs on production only; first promotion sandbox → qa → master; before the first promotion, a build-time env check (validate E4) and security headers (validate S3: `X-Content-Type-Options: nosniff`, `frame-ancestors` or `X-Frame-Options`, `Referrer-Policy`; a CSP only with a test); the Sandbox stable URL keeps working throughout, because Paul's job applications link to it | `m5-environments` → `sandbox`, then promotion PRs | Mon 12 – Tue 13 Oct | **About 40 min of setup, plus the approvals in each promotion** |
-| M6 | README (architecture, running locally, "Local secrets" with `<!-- yanshuf-secrets -->`), demo script, responsive and Lighthouse pass, Claude PR review (brought forward to PR #15; see Model split); from the validate review: stop the agent when the visitor disconnects (E2), an explicit error for a `tool_use` stop with no tool block (E7), render or strip the model's headings and tables in the answer (E10), type `sessionId({ create: true })` as a string (E11), and an Excerpts message when an answer cites nothing | `m6-readme` → `sandbox` → promotion | Tue 13 – Wed 14 Oct | **Final walk-through Wed 14 Oct** |
+| M4 | Eval set (12–15 questions), `npm run eval` (hit@1/3/5, MRR), CI job with a pgvector service, job-summary table, threshold set from the first run | `m4-evals` → `sandbox` | Tue 13 Oct | **About 1.5 h of sessions plus review** |
+| M5 | Neon QA and production projects; GitHub Environments with production gated on Paul's approval; Vercel env scoping and `git.deploymentEnabled.master: false`; `pipeline.yml` (migrate, then ingest; on `master` it waits for Paul's approval, migrates, ingests, then runs `vercel deploy --prod`, which Vercel builds), plus QA in `cleanup.yml`, the GitHub Actions trigger for `/api/cron/cleanup` that the fix PR adds for Sandbox, because Vercel runs cron jobs on production only; first promotion sandbox → qa → master; before the first promotion, a build-time env check (validate E4) and security headers (validate S3: `X-Content-Type-Options: nosniff`, `frame-ancestors` or `X-Frame-Options`, `Referrer-Policy`; a CSP only with a test); the Sandbox stable URL keeps working throughout, because Paul's job applications link to it | `m5-environments` → `sandbox`, then promotion PRs | Wed 14 Oct | **About 40 min of setup, plus the approvals in each promotion** |
+| M6 | README (architecture, running locally, "Local secrets" with `<!-- yanshuf-secrets -->`), demo script, responsive and Lighthouse pass, Claude PR review (brought forward to PR #15; see Model split); from the validate review: stop the agent when the visitor disconnects (E2), an explicit error for a `tool_use` stop with no tool block (E7), render or strip the model's headings and tables in the answer (E10), type `sessionId({ create: true })` as a string (E11), and an Excerpts message when an answer cites nothing; after the first promotion, the README's live link and the repository's About website point at production, with the Sandbox URL kept as the preview | `m6-readme` → `sandbox` → promotion | Thu 15 Oct | **Final walk-through Thu 15 Oct** |
 
-The full set is due Wed 14 Oct, with Thu 15 as buffer. Sunday 11 is TriviaFoundry's launch, so nothing is planned here that day.
+The full set was due Wed 14 Oct, with Thu 15 as buffer. M4 started a day late, on Tue 13, so M5 runs on Wed 14 and M6 on Thu 15, using the buffer. Sunday 11 is TriviaFoundry's launch, so nothing is planned here that day.
 
 **Wednesday 7 October had no class,** so S1 was done by 15:45 and M2 started straight after; M3 can follow the same evening. The first cut is due on Thursday 8 October in the morning, leaving the afternoon for Paul's walk-through and the application.
 
@@ -38,10 +38,10 @@ Until the first promotion in M5, `master` holds only the chain. The first cut li
   - `db/migrations/0001_init.sql`
   - `corpus/manifest.json`, `corpus/files/*` (committed), plus the Mojaloop `LICENSE.md` (the repository ships no NOTICE)
   - `evals/{questions,threshold}.json`
-- **Scripts:** `scripts/{migrate,corpus-fetch,ingest-corpus,retrieval-check,smoke-sql,eval}.ts`
+- **Scripts:** `scripts/{migrate,corpus-fetch,ingest-corpus,retrieval-check,smoke-sql,eval,vercel-build}.ts`
 - **Pipelines:** `.github/workflows/{ci,cleanup,evals,pipeline}.yml`, `.github/dependabot.yml`
 - **Agent setup:** `AGENTS.md`, `CLAUDE.md`, `REVIEW.md`, `.claude/settings.json`, `.claude/hooks/{no-placeholders,production-gate}.mjs`, `.claude/agents/{verifier,architect}.md`
-- **Config and docs:** `package.json`, `package-lock.json`, `tsconfig.json`, `eslint.config.mjs`, `vitest.config.ts`, `postcss.config.mjs`, `app/globals.css`, `vercel.json`, `.env.example`, `.gitattributes`, `.gitignore`, `.worktreeinclude`, `README.md`, `docs/screenshot.png`. Scripts run through `tsx` with `--env-file-if-exists=.env.local`.
+- **Config and docs:** `package.json`, `package-lock.json`, `tsconfig.json`, `next.config.ts`, `eslint.config.mjs`, `vitest.config.ts`, `postcss.config.mjs`, `app/globals.css`, `vercel.json`, `.env.example`, `.gitattributes`, `.gitignore`, `.worktreeinclude`, `README.md`, `docs/screenshot.png`. Scripts run through `tsx` with `--env-file-if-exists=.env.local`.
 
 ## Schema delta
 From nothing to the spec's four tables:
@@ -98,8 +98,10 @@ From nothing to the spec's four tables:
 - **M5:**
   - One change travels sandbox → qa → master.
   - Sandbox and QA builds migrate before building.
-  - The production pipeline waits for Paul's approval, migrates, then deploys.
+  - The production pipeline waits for Paul's approval, migrates, ingests, has Vercel build and deploy the commit, and its health step reports `production` and the newest migration.
   - `/api/health` reports a different database in each environment.
+  - Tests cover the build-time env check (a missing or blank variable, an unset model or budget, the wrong `APP_ENV` for production, `qa` and other previews, a pooled migration URL, URLs from two databases) and two migrate runs at once; the `m5-environments` preview build log shows the check passing and `nothing to apply` before `next build`.
+  - Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: strict-origin-when-cross-origin`.
   - On the production URL itself, before production is called live: `/api/health` shows production's database, one example question gives checked citations and none unchecked, an upload can be asked about and then deleted, and one Vercel cron cleanup run appears in the production logs.
 - **M6:**
   - The README renders on GitHub.
@@ -117,6 +119,7 @@ From nothing to the spec's four tables:
 8. **Neon cold start after 5 idle minutes:** about a second on the first query. Acceptable for a demo.
 9. **Windows specifics:** hooks run as Node scripts under Git Bash with `CLAUDE_CODE_USE_POWERSHELL_TOOL=0`, and `.gitattributes` pins LF.
 10. **Scheduled workflows stop after 60 idle days:** GitHub disables a repository's schedules after 60 days without activity, so cleanup.yml would stop silently. Any push keeps them alive; M5's pipeline will.
+11. **A variable missing or mistyped on QA or production:** the build-time env check fails that build with the variable's name. Fix it in Vercel, then redeploy (for production, re-run the Release job).
 
 ## Rejected alternatives
 - **Finishing the Python prototype:** the posting asks for Node.js and React, and the prototype's design flaws go deeper than a fix.
@@ -134,6 +137,7 @@ From nothing to the spec's four tables:
 - **A Vercel protection bypass token for previews (c):** interviewers would need a special link. Protection off is simpler for a public demo whose limits already protect the keys.
 - **Accepting broken feature previews until merge (b.11):** a feature preview that fails against the old schema can't be reviewed. Additive migrations applied at preview build time keep every preview working.
 - **Vercel auto-deploying production on merge (b.12):** new code could reach the old schema while the migration waits for approval. The pipeline migrates first, then deploys.
+- **Building production in GitHub (`vercel build`, then `vercel deploy --prebuilt --prod`):** Vercel Secret values are write-only, so `vercel pull` writes "[SENSITIVE]" in their place, and a build in GitHub could neither check nor use production's secrets without copying them into GitHub too. After approval and migration, the pipeline has Vercel build the commit instead (Paul, 13 Oct).
 - **Forced `tool_choice` (`any` or `tool`) for the final round (b.5):** it returns a 400 on Sonnet 5.5. `none` forces the answer instead.
 - **Adaptive thinking with `display: "updates"` (b.5):** it needs a beta header. `between_tools` is generally available on Sonnet 5.5 and gives the same progress updates without up-front thinking.
 - **Storing sentence blocks (b.2):** the splitter is deterministic, so recomputing the blocks from the stored chunk keeps the schema minimal and the check honest.

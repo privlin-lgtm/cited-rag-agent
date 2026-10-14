@@ -9,7 +9,8 @@ Run from the repo root.
 - `npm run typecheck`: `tsc --noEmit`. Healthy: no output, exit 0.
 - `npm test`: Vitest. Healthy: `Test Files  N passed (N)` and `Tests  N passed (N)`.
 - `npm run build`: `next build`. Healthy: `✓ Compiled successfully`, then the route table.
-- `npm run migrate`: applies pending `db/migrations/*.sql` to Sandbox through `.env.local`. Healthy: `applied 0001_init.sql` or `nothing to apply`.
+- `npm run vercel-build`: what Vercel runs instead of `build`: the env check, then on previews the migrations, then `next build`. It refuses to run outside Vercel; locally, use `npm run build`.
+- `npm run migrate`: applies pending `db/migrations/*.sql` to Sandbox through `.env.local`. Two runs at once against one database are safe: each takes an advisory lock and re-checks under it. Healthy: `applied 0001_init.sql` or `nothing to apply`.
 - `npm run smoke:sql`: runs every statement the app and its scripts issue, through postgres.js on Sandbox, in one transaction that is always rolled back. Run it after any change to SQL, because PGlite hides driver differences. Healthy: one line per statement with its row count, then `rolled back; nothing left behind`.
 - `npm run corpus:fetch`: downloads the corpus into `corpus/files/` and rewrites `corpus/manifest.json`. Needs the network, not `.env.local`. Healthy: one line per document, then `9 documents, 3559380 bytes (3.39 MB)`. A 403 or an HTML answer fails with the URL.
 - `npm run ingest:corpus`: ingests the manifest into the database in `.env.local` (Sandbox). A first run of the nine documents takes about a minute, and a changed `INGEST_VERSION` re-ingests all of them. `INGEST_VERSION` is 3. Healthy: one line per document, then `9 ingested, 0 skipped`, and `0 ingested, 9 skipped` on a rerun.
@@ -23,6 +24,11 @@ Run lint, typecheck, test and build, and paste the output. Fix the code, not the
 - Work on `m<N>-<slug>` or `fix/<slug>`, branched from `sandbox`.
 - Push only with `git push -u origin <that branch>`, and open PRs into `sandbox`.
 - Never push to `sandbox`, `qa` or `master`. Never merge. Never deploy. Promotion PRs are Paul's.
+
+## Environments
+- Sandbox (`sandbox` and every feature preview), QA (`qa`) and production (`master`), each with its own Neon database. Promotion is by PR, and Paul merges it.
+- `.github/workflows/pipeline.yml` (Release) runs on pushes to those three branches: migrate, then ingest. On `master` it waits for Paul's approval in the `production` environment, then has Vercel build and deploy.
+- Never run `vercel` from this machine. The production-gate hook blocks a shell command containing `vercel` and `--prod`, even inside a heredoc, so write workflow files with the editor tools.
 
 ## Migrations
 Each change gets a new file, additive and safe for the code already deployed. Never edit an applied migration.
@@ -43,7 +49,7 @@ Never read `.env`, `.env.local` or `.env.*.local`. `.env.local` holds Sandbox cr
 - A question holds $0.10 of the daily budget while it runs (`reserveBudget`, `releaseBudget` in `lib/limits.ts`). Keep every exit of the run in `handleAsk` inside its `finally`, so the hold is always released.
 - `embed:tokens` is debited by the `onBatch` callback that `debited()` passes to the embedder, one Voyage response at a time. Do not debit again from a report's `tokens`.
 - `handleAsk` writes one `console.info` JSON line per run. Never put the question, document ids, the session id or the address hash in it.
-- `.github/workflows/cleanup.yml` calls the Sandbox cleanup route; it is scheduled hourly, and GitHub runs it every few hours. GitHub runs scheduled workflows from the default branch only, so it starts once `sandbox` is the default branch.
+- `.github/workflows/cleanup.yml` (Preview cleanup) calls the Sandbox and QA cleanup routes; it is scheduled hourly, and GitHub runs it every few hours. On production, Vercel's hourly cron job calls the route.
 
 ## Subagents
 Call `verifier` before opening any PR and paste its report in the PR. Call `architect` when the same test fails two cycles running.
