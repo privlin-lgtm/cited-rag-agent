@@ -13,6 +13,10 @@ on:
       - 'db/migrations/**'
       - 'scripts/eval.ts'
       - 'scripts/ingest-corpus.ts'
+      - 'scripts/migrate.ts'
+      - 'lib/evals.ts'
+      - 'lib/corpus.ts'
+      - 'lib/db.ts'
       - '.github/workflows/evals.yml'
 
 permissions:
