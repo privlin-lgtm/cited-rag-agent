@@ -44,6 +44,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     process.exit(1);
   }
   checkBuildEnv(process.env);
+  console.log(`env check passed for ${process.env.APP_ENV}`);
   if (process.env.VERCEL_ENV !== 'production')
     console.log(migrationSummary(await migrate(postgresDb(z.url().parse(process.env.MIGRATION_DATABASE_URL)))));
   process.exit(spawnSync('next', ['build'], { stdio: 'inherit', shell: true }).status ?? 1);
