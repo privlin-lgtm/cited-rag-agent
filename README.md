@@ -32,6 +32,12 @@ Next.js 16 (App Router) and React 19 on Vercel; TypeScript; Tailwind 4. Postgres
 - Spend: a daily model budget, $1 by default and raised on demo days, with $0.10 held for each question while it runs, and 2M embedding tokens a day.
 - Measured over 12 runs of the four example questions: $0.0365 and 7.8 s per question on average.
 
+## Environments and releases
+
+Three environments, each with its own Neon database: Sandbox (the `sandbox` branch and every feature preview), QA (`qa`) and production (`master`). A change merges into `sandbox`, then travels by pull request to `qa` and on to `master`. Every Vercel build first checks its environment variables and fails with the name of any that is missing or points at the wrong environment; preview builds then migrate their database before `next build`. Production waits for approval in GitHub: the Release workflow migrates, ingests the corpus, has Vercel build and deploy the commit, and checks `/api/health`. Migrations are additive, so the code already running works with the new schema.
+
+The workflow: [.github/workflows/pipeline.yml](.github/workflows/pipeline.yml)
+
 ## Running locally
 
 Copy `.env.example` to `.env.local`, fill in the keys, then run these from the repo root.
@@ -71,7 +77,7 @@ The check fails when hit@5 falls below 12 of 14 ([evals/threshold.json](evals/th
 
 ## Status
 
-First cut on Sandbox, with retrieval evals in CI. Next: the QA and production environments (M5).
+Sandbox, QA and production, with retrieval evals in CI and a release pipeline gated on approval; production goes live with the first promotion. Next: the README, demo and Lighthouse pass (M6).
 
 ## Local secrets
 

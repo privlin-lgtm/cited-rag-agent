@@ -27,4 +27,10 @@ describe('migrate', () => {
     expect(await migrate(db)).toEqual([]);
     expect(await db.query('select name from schema_migrations')).toEqual([{ name: '0001_init.sql' }]);
   });
+
+  it('applies each file once when two runs start together', async () => {
+    const runs = await Promise.all([migrate(db), migrate(db)]);
+    expect(runs.flat()).toEqual(['0001_init.sql']);
+    expect(await db.query('select name from schema_migrations')).toEqual([{ name: '0001_init.sql' }]);
+  });
 });

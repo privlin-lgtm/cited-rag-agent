@@ -3,7 +3,7 @@ import { usdPerMTok } from './pricing';
 
 export const appEnv = z.enum(['local', 'sandbox', 'qa', 'production']).default('local');
 
-const schema = z.object({
+export const schema = z.object({
   DATABASE_URL: z.url(),
   VOYAGE_API_KEY: z.string().min(1),
   ANTHROPIC_API_KEY: z.string().min(1),
