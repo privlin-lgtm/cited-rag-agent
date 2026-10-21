@@ -1,5 +1,6 @@
 import type { Excerpt } from '../lib/agent/citations';
 import { inlineMarkdown } from '../lib/inline-markdown';
+import type { CitationsEvent } from '../lib/run-state';
 import { Badge } from './ui/badge';
 
 const Rendered = ({ text }: { text: string }) =>
@@ -19,10 +20,20 @@ const Rendered = ({ text }: { text: string }) =>
     ),
   );
 
-export const ExcerptsPanel = ({ excerpts, noAnswer }: { excerpts: Excerpt[]; noAnswer: boolean }) => (
+export const ExcerptsPanel = ({ excerpts, noAnswer, citations }: { excerpts: Excerpt[]; noAnswer: boolean; citations?: CitationsEvent }) => (
   <section aria-label="Excerpts">
     <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-500">{noAnswer ? 'Retrieved passages (no answer generated)' : 'Excerpts'}</h2>
-    {excerpts.length === 0 && <p className="text-sm text-zinc-500">The passages behind each checked citation appear here, with the cited sentences highlighted.</p>}
+    {excerpts.length === 0 && (
+      <p className="text-sm text-zinc-500">
+        {!citations
+          ? 'The passages behind each checked citation appear here, with the cited sentences highlighted.'
+          : citations.status === 'declined'
+            ? 'Claude declined to answer, so there is no excerpt to show.'
+            : citations.results.length === 0
+              ? 'This answer cites no passage, so there is no excerpt to show. The steps show what was searched.'
+              : "None of this answer's citations passed the check, so no excerpt is shown."}
+      </p>
+    )}
     <div className="space-y-4">
       {excerpts.map((excerpt) => (
         <article key={excerpt.chunkId} id={`excerpt-${excerpt.n}`} className="scroll-mt-4 rounded-lg border border-zinc-200 p-3 text-sm target:border-indigo-500 target:ring-2 target:ring-indigo-500/30 dark:border-zinc-800">
