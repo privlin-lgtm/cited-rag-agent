@@ -1,0 +1,71 @@
+name: Retrieval evals
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'lib/ingest/**'
+      - 'lib/search.ts'
+      - 'lib/embed.ts'
+      - 'lib/agent/**'
+      - 'corpus/**'
+      - 'evals/**'
+      - 'db/migrations/**'
+      - 'scripts/eval.ts'
+      - 'scripts/ingest-corpus.ts'
+      - 'scripts/migrate.ts'
+      - 'lib/evals.ts'
+      - 'lib/corpus.ts'
+      - 'lib/db.ts'
+      - '.github/workflows/evals.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: evals-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  evals:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+      MIGRATION_DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.6-pg18@sha256:2ba9ca5f2e7daa0f0e7723cba1ee9167bab54efd3640516a44ac1a928dd67e7a
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - name: Require the Voyage key
+        env:
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+        run: |
+          if [ -z "$VOYAGE_API_KEY" ]; then
+            echo "::error::VOYAGE_API_KEY is not available to this run; Dependabot and fork pull requests can't read it. Run the eval by hand."
+            exit 1
+          fi
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run migrate
+      - name: Ingest the corpus into the service database
+        env:
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+        run: npm run ingest:corpus
+      - name: Run the retrieval eval
+        env:
+          VOYAGE_API_KEY: ${{ secrets.VOYAGE_API_KEY }}
+        run: npm run eval

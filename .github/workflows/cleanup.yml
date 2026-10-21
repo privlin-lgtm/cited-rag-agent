@@ -1,0 +1,48 @@
+name: Preview cleanup
+
+on:
+  schedule:
+    - cron: '17 * * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: sandbox-cleanup
+  cancel-in-progress: false
+
+jobs:
+  cleanup:
+    name: cleanup ${{ matrix.name }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Sandbox
+            url: https://cited-rag-agent-git-sandbox-privlin.vercel.app
+            secret: SANDBOX_CRON_SECRET
+          - name: QA
+            url: https://cited-rag-agent-git-qa-privlin.vercel.app
+            secret: QA_CRON_SECRET
+    steps:
+      - name: Call the ${{ matrix.name }} cleanup route
+        env:
+          CRON_SECRET: ${{ secrets[matrix.secret] }}
+          CLEANUP_URL: ${{ matrix.url }}
+          LEG: ${{ matrix.name }}
+        run: |
+          status=0
+          curl --fail-with-body --silent --show-error --max-time 60 \
+            --header "Authorization: Bearer ${CRON_SECRET}" \
+            --output response.json \
+            "${CLEANUP_URL}/api/cron/cleanup" || status=$?
+          {
+            echo "### ${LEG} cleanup"
+            echo '```json'
+            cat response.json
+            echo
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"

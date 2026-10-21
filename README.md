@@ -1,129 +1,86 @@
-# Personal Knowledge RAG System
+# cited-rag-agent
 
-[![CI](https://github.com/privlin-lgtm/personal-knowledge-RAG-system/actions/workflows/ci.yml/badge.svg)](https://github.com/privlin-lgtm/personal-knowledge-RAG-system/actions/workflows/ci.yml)
+An agent that answers questions about a pack of cross-border payments documents and shows how it got there. Claude searches the documents with tools and cites passages, and every citation is checked against the stored text before it is marked checked.
 
-Ingest PDFs and notes, then ask questions about them in natural language.
+**Live on Sandbox:** https://cited-rag-agent-git-sandbox-privlin.vercel.app
 
-## How it works
+![The cancellation question answered with checked citations: the steps the agent took, the answer, and the cited excerpts with the cited sentences highlighted](docs/screenshot.png)
 
-1. **Ingest** — files are split into overlapping text chunks, embedded locally with
-   [sentence-transformers](https://www.sbert.net/) (`all-MiniLM-L6-v2`), and stored in a local
-   [ChromaDB](https://www.trychroma.com/) vector database (`.chroma/`).
-2. **Ask** — your question is embedded the same way, the most similar chunks are retrieved from
-   Chroma, and Claude synthesizes an answer from those chunks, citing sources.
+## How a citation is checked
 
-## Setup
+1. The search tools return passages to Claude as `search_result` blocks, one per chunk, each holding the chunk's sentences as separate content blocks, with citations enabled. A citation names a result by index and a range of sentence blocks inside it.
+2. The server keeps one list of every `search_result` it sent in the run. A citation's index points into that list, across all rounds.
+3. For each cited sentence block the check confirms that the index is in range, that the result's chunk exists and belongs to a document in scope, and that the block text equals the block at the same position when the stored chunk is split again and appears in the stored chunk text. It compares block by block and never uses `cited_text` as one string.
+4. The file and page shown come from the database row, never from the model's text. A citation that fails shows as "unchecked".
 
-The project path (deeply nested under OneDrive with a non-ASCII folder name) is long enough that
-some packages (torch's license files in particular) blow past Windows' 260-character path limit
-if the virtualenv lives inside the project. Create it in a short path instead:
+**What "checked" proves:** the cited sentences are in the stored text of a passage retrieved in that run. **What it does not prove:** that the sentence supports the claim it is attached to, or that the passage answers the question asked. The highlighted excerpt is there for a reader to judge that, and the retrieval evals below measure how often the passages that answer a question are found.
 
-```bash
-python -m venv C:\Users\<you>\.venvs\pk-rag
-C:\Users\<you>\.venvs\pk-rag\Scripts\activate
-pip install -r requirements.txt
-```
+## The agent loop
 
-(If your Windows build has [long path support](https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation#enable-long-paths-in-windows-10-version-1607-and-later) enabled, a regular `.venv` inside the project works fine too.)
+Claude Sonnet 5.5 runs a tool loop of at most six rounds with four tools: `search_documents` (semantic), `keyword_search` (exact terms), `read_neighbours` and `list_documents`. Search results come back as `search_result` blocks, and the loop keeps one global block index across rounds. Each step streams to the page as newline-delimited JSON. When the model stops, the check runs. If embedding the query fails, the search falls back to keywords and the step says so.
 
-Copy `.env.example` to `.env` and add your Anthropic API key:
+Document text is data, not instructions. A hostile document can steer the prose of an answer but cannot forge a checked citation, because the check runs in code on the stored text.
 
-```bash
-copy .env.example .env
-```
+## Stack
 
-## Usage
+Next.js 16 (App Router) and React 19 on Vercel; TypeScript; Tailwind 4. Postgres 18 with pgvector on Neon: HNSW for semantic search and a generated `tsvector` for keywords. Voyage `voyage-4` embeddings. The Anthropic Messages API through `@anthropic-ai/sdk`. Vitest, with PGlite standing in for Postgres.
 
-```bash
-# Ingest a file or a whole directory (PDF, .txt, .md supported)
-python -m rag.cli ingest data/some-notes.pdf
-python -m rag.cli ingest data/
+## Limits and cost
 
-# Ask a question
-python -m rag.cli ask "What did I write about vector databases?"
+- Per address: 15 questions an hour and 10 uploads a day.
+- Uploads: one `.md`, `.pdf` or `.txt` file of at most 4 MB, 40 pages and 100,000 estimated tokens, deleted after 24 hours.
+- Spend: a daily model budget, $1 by default and raised on demo days, with $0.10 held for each question while it runs, and 2M embedding tokens a day.
+- Measured over 12 runs of the four example questions: $0.0365 and 7.8 s per question on average.
 
-# See what's been ingested
-python -m rag.cli list
-```
+## Environments and releases
 
-Without an `ANTHROPIC_API_KEY` set, `ask` falls back to printing the raw retrieved excerpts
-instead of a synthesized answer.
+Three environments, each with its own Neon database: Sandbox (the `sandbox` branch and every feature preview), QA (`qa`) and production (`master`). A change merges into `sandbox`, then travels by pull request to `qa` and on to `master`. Every Vercel build first checks its environment variables and fails with the name of any that is missing or points at the wrong environment; preview builds then migrate their database before `next build`. Production waits for approval in GitHub: the Release workflow migrates, ingests the corpus, has Vercel build and deploy the commit, and checks `/api/health`. Migrations are additive, so the code already running works with the new schema.
 
-Use `--collection <name>` (before the subcommand) to keep separate knowledge bases —
-e.g. `python -m rag.cli --collection work ingest work-notes/`.
+The workflow: [.github/workflows/pipeline.yml](.github/workflows/pipeline.yml)
 
-Use `--store memory` to run against an ephemeral, dependency-free in-memory vector store instead
-of the default persistent Chroma one (nothing survives the process exiting) — useful for a quick
-one-off session, and proof that the vector store really is swappable (see
-[ADR 0001](docs/decisions/0001-protocol-based-dependency-injection.md)).
+## Running locally
 
-Use `-v`/`--verbose` for debug logging of this project's own ingest/retrieval trace (third-party
-libraries stay quiet regardless).
-
-## Configuration
-
-All of these are optional environment variables (see `config.py`):
-
-| Variable              | Default                | Purpose                              |
-|-----------------------|-------------------------|---------------------------------------|
-| `RAG_EMBEDDING_MODEL` | `all-MiniLM-L6-v2`      | sentence-transformers model to embed with |
-| `RAG_LLM_MODEL`       | `claude-sonnet-5`       | Claude model used to synthesize answers |
-| `RAG_DATA_DIR`        | `<project>/.chroma`     | Where the vector store persists data |
-
-## Testing
+Copy `.env.example` to `.env.local`, fill in the keys, then run these from the repo root.
 
 ```bash
-pip install -r requirements-dev.txt
-pytest                          # unit tests only (fast, no model download or network access)
-pytest -m integration           # real embedder + real Chroma, end-to-end (slower, needs network
-                                 # on first run to download the embedding model)
-ruff check .                    # lint
-mypy rag                        # type check
+npm ci
+npm run migrate        # apply db/migrations to the database in .env.local
+npm run ingest:corpus  # embed the nine documents (needs Voyage)
+npm run dev            # http://localhost:3000
+npm run lint && npm run typecheck && npm test && npm run build
+npm run smoke:sql      # every SQL statement through postgres.js, rolled back
 ```
 
-Most tests use in-memory fakes for the embedding model and vector store (`tests/fakes.py`), so
-they run instantly. `tests/test_vectorstore_contract.py` runs the same behavioral suite against
-both real `VectorStore` implementations (Chroma and in-memory) to prove they're interchangeable.
-`tests/test_integration.py` is the one place the real embedder and real Chroma run together —
-including a regression test for the stale-chunk-on-reingest bug this project's code review found,
-verified against the real stack rather than a fake. CI (`.github/workflows/ci.yml`) runs lint,
-type-check, unit tests, and integration tests as separate jobs on every push/PR.
+`npm run corpus:fetch` re-downloads the documents from their sources and rewrites the manifest.
 
-## Project layout
+## Corpus
 
-```
-rag/
-  config.py               # centralized, env-overridable settings
-  interfaces.py            # Embedder / VectorStore protocols + RetrievedChunk
-  logging_config.py         # --verbose wiring (this project's own loggers only)
-  ingest.py                  # file loading + chunking (PDF via pypdf, plain text/markdown)
-  embeddings.py               # SentenceTransformerEmbedder (implements Embedder)
-  vectorstore.py               # ChromaVectorStore (implements VectorStore)
-  inmemory_vectorstore.py       # InMemoryVectorStore (implements VectorStore, zero dependencies)
-  knowledge_base.py              # KnowledgeBase facade: orchestrates embedder + store
-  qa.py                            # retrieval + streaming Claude-based answer synthesis
-  cli.py                            # composition root: wires dependencies, ingest/ask/list
-tests/
-  fakes.py                       # in-memory Embedder/VectorStore fakes for fast, isolated tests
-  test_ingest.py                  # chunking + file-discovery edge cases
-  test_knowledge_base.py           # add/retrieve orchestration edge cases
-  test_qa.py                        # context building, fallbacks, streaming, injection guard
-  test_vectorstore_contract.py       # same suite run against both VectorStore implementations
-  test_integration.py                 # real embedder + real Chroma, end-to-end (marked slow)
-docs/decisions/                # ADRs -- why Protocol-DI, why Chroma, why word-count chunking
-data/                          # put your source documents here
-.chroma/                       # persisted vector DB (gitignored)
-```
+Nine documents, committed under `corpus/files/` with their sources, licences and hashes in [corpus/manifest.json](corpus/manifest.json): three US federal texts on remittance transfers (public domain), the PSD2 directive (EU reuse, source acknowledged), and five Mojaloop documentation pages (Apache-2.0, except the generic transaction patterns page, which states CC BY-ND 4.0).
 
-### Why this shape
+## The chain
 
-`cli.py` is the only place that imports the concrete `SentenceTransformerEmbedder`,
-`ChromaVectorStore`, and `InMemoryVectorStore` classes and wires them into a `KnowledgeBase` —
-every other module depends on the `Embedder`/`VectorStore` protocols in `interfaces.py`, not the
-libraries themselves. Swapping the embedding model or vector database means writing one new class
-that satisfies the protocol and changing that one wiring line in `cli.py`; `qa.py` and
-`knowledge_base.py` never change. This isn't just asserted — `InMemoryVectorStore` is a second,
-independent `VectorStore` with zero third-party dependencies, and
-`tests/test_vectorstore_contract.py` proves it behaves identically to `ChromaVectorStore` under
-the same test suite. See [docs/decisions/](docs/decisions/) for the reasoning behind this and the
-other non-obvious design choices in the project.
+[Intent](intent/2026-10-07-mvp/intent.md) · [Spec](intent/2026-10-07-mvp/spec.md) · [Plan](intent/2026-10-07-mvp/plan.md) · [Review of the first spec and plan drafts](intent/2026-10-07-mvp/review-2026-10-07.md)
+
+The Python prototype this repo started as is kept at the tag `python-prototype`.
+
+## Retrieval evals
+
+`npm run eval` scores semantic search on 14 questions in [evals/questions.json](evals/questions.json). Each question lists every file and page or heading whose text answers it, written after reading the ingested documents. A question is a hit at k when one of the top k passages is one of those. Two of the questions are answered only by a table in the CFPB guide, and several use plain words that the answering passage does not.
+
+First honest run, on the Sandbox corpus, 13 Oct 2026:
+
+| hit@1 | hit@3 | hit@5 | MRR (top 10) |
+|---|---|---|---|
+| 9/14 | 11/14 | 13/14 | 0.750 |
+
+The check fails when hit@5 falls below 12 of 14 ([evals/threshold.json](evals/threshold.json), one question under the first run). [The evals workflow](.github/workflows/evals.yml) ingests the corpus into a fresh pgvector service, so it tests ingest as well as search, and runs on pull requests that touch ingest, search, the agent, the corpus or the eval set. One run spends about 178,000 Voyage tokens (178,185 to ingest the corpus and 267 for the questions), which is free inside Voyage's 200M free tokens, and makes no Anthropic calls.
+
+## Status
+
+Sandbox, QA and production, with retrieval evals in CI and a release pipeline gated on approval; production goes live with the first promotion. Next: the README, demo and Lighthouse pass (M6).
+
+## Local secrets
+
+<!-- yanshuf-secrets -->
+
+`.env.local` holds Sandbox credentials only and is kept in Paul's encrypted secrets archive. The key names are in `.env.example`.
