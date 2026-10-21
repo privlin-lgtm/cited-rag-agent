@@ -11,7 +11,7 @@ import { ingestUpload, MAX_UPLOAD_BYTES, UploadError } from './upload';
 export type ApiDeps = {
   db: Db;
   now: () => Date;
-  sessionId: (options: { create: boolean }) => Promise<string | undefined>;
+  sessionId: { (options: { create: true }): Promise<string>; (options: { create: false }): Promise<string | undefined> };
   ipSecret: string;
   cronSecret: string;
   budgetUsd: number;
@@ -154,7 +154,7 @@ export const handleUpload = (request: Request, deps: ApiDeps) =>
     if (Number(request.headers.get('content-length') ?? 0) > MAX_UPLOAD_BYTES + BODY_SLACK_BYTES) return Response.json({ error: 'The file is larger than 4 MB.' }, { status: 413 });
     const file = (await request.formData().catch(() => null))?.get('file');
     if (!(file instanceof File)) return Response.json({ error: 'Send one file in the "file" field of a multipart form.' }, { status: 400 });
-    const sessionId = (await deps.sessionId({ create: true })) ?? '';
+    const sessionId = await deps.sessionId({ create: true });
     await reserveUpload(deps.db, clientKey(request.headers, deps.ipSecret), deps.now());
     await assertEmbedBudget(deps.db, deps.now());
     const result = await ingestUpload(deps.db, debited(deps.documentEmbedder, deps), sessionId, file.name, new Uint8Array(await file.arrayBuffer()), (estimatedTokens) =>

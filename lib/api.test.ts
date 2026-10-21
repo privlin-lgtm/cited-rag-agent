@@ -44,7 +44,7 @@ const model: ModelCall = async (params, onText) => {
 const deps = (overrides: Partial<ApiDeps> = {}, session: string | null = 'sess1'): ApiDeps => ({
   db: fixture.db,
   now: () => NOW,
-  sessionId: async ({ create }) => session ?? (create ? 'sess1' : undefined),
+  sessionId: (async ({ create }: { create: boolean }) => session ?? (create ? 'sess1' : undefined)) as ApiDeps['sessionId'],
   ipSecret: 'ip-secret',
   cronSecret: 'cron-secret',
   budgetUsd: 1,
