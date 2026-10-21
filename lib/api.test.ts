@@ -195,6 +195,35 @@ describe('POST /api/ask', () => {
     expect(modelCalls).toHaveLength(1);
   });
 
+  it('makes no second model call when the visitor leaves during the first tool round, keeps that call\'s cost and logs abandoned', async () => {
+    const leaving: Embedder = async (texts, inputType, onBatch) => {
+      await reader.cancel();
+      return fakeEmbedder(texts, inputType, onBatch);
+    };
+    script = (calls) =>
+      calls.length === 1
+        ? reply([text('Looking.'), toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 3 })], 'tool_use')
+        : reply([text('Cancel within 30 minutes.', [cite(0, 0)])], 'end_turn');
+    let open!: () => void;
+    gate = new Promise((resolve) => (open = resolve));
+    const response = await handleAsk(askRequest({ question: 'How long to cancel?' }), deps({ queryEmbedder: leaving }));
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+    open();
+    await vi.waitFor(() => expect(info).toHaveBeenCalledOnce());
+    expect(modelCalls).toHaveLength(1);
+    await vi.waitFor(async () => expect(await spent('anthropic:usd')).toBe(400));
+    expect(JSON.parse(String(info.mock.calls[0][0]))).toMatchObject({ event: 'ask', status: 'abandoned', rounds: 1, toolCalls: 1 });
+  });
+
+  it('ends a tool_use stop with no tool block in an explicit error, logs error and releases the hold', async () => {
+    script = () => reply([text('Let me look that up.')], 'tool_use');
+    const lines = await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));
+    expect(lines.map(({ type }) => type)).toEqual(['answer', 'error', 'done']);
+    expect(lines[1]).toMatchObject({ message: 'the model stopped for a tool call but sent no tool_use block' });
+    expect(JSON.parse(String(info.mock.calls[0][0]))).toMatchObject({ event: 'ask', status: 'error' });
+    expect(await spent('anthropic:usd')).toBe(400);
+  });
+
   it("answers 400 for a document id outside the session, another session's upload included, and reserves no budget", async () => {
     const other = await ingestUpload(fixture.db, fakeEmbedder, 'sess2', 'theirs.txt', new TextEncoder().encode('Private notes.'));
     for (const documentIds of [[other.id], ['00000000-0000-0000-0000-000000000000'], [fixture.ids['cancel.md'], other.id]]) {
