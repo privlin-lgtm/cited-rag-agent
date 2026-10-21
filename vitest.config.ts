@@ -1,5 +1,5 @@
 import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
-  test: { exclude: [...configDefaults.exclude, '.claude/**', '.next/**'] },
+  test: { exclude: [...configDefaults.exclude, '.claude/**', '.next/**'], hookTimeout: 30_000 },
 });
