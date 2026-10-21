@@ -8,37 +8,40 @@ Times are Israel time. The build runs in Claude Code on Paul's machine, from the
 |---|---|---|---|---|
 | M0 | Intent, spec, plan, plus the build session's review of the spec and plan (`review-2026-10-07.md`) and these revisions; gate commits on `flow/mvp` | `flow/mvp` → `master` (PR #9) | Wed 7 Oct 12:00–14:00 | **Accept the intent; approve the spec (with decisions D1–D6) and the plan; merge** |
 | M1 | Scaffold and guardrails (workflow Phase 3a): the `sandbox` branch; the Python code leaves the tree; Next.js app; one command each for lint, typecheck, test and build; the `Db` interface with both drivers; `0001_init.sql` and `scripts/migrate.ts`; `/api/health`; the agent files in the appendix; CI; Dependabot | `m1-scaffold` → `sandbox` | Wed 14:00–16:30 | **Manual approvals until the hooks are proven; review and merge by 17:30, then close Dependabot PRs #1–#8 (or let the M2 session do it)** |
-| S1 | Accounts and keys: Neon Sandbox project; Anthropic workspace (limit $30) and key; Voyage key (no card); Vercel project (region `fra1`, protection off, env vars); `.env.local` copied into the secrets archive | n/a | Wed 16:30–17:45, or 20:00 before M2 | **About 30 min, steps from the planning session** |
-| M2 | The corpus pack committed with manifest and hashes; extractors, chunker, sentence splitter, Voyage client, versioned ingest; semantic and keyword search; the real corpus ingested into Sandbox | `m2-ingest` → `sandbox` | Wed 20:15–23:30, after class | **Start the session, approve its plan, merge** |
+| S1 | Accounts and keys: Neon Sandbox project; Anthropic workspace (limit $20) and key; Voyage key (no card); Vercel project (region `fra1`, protection off, env vars); `.env.local` copied into the secrets archive | n/a | Wed 16:30–17:45, or 20:00 before M2 | **About 30 min, steps from the planning session** |
+| M2 | The corpus pack committed with manifest and hashes; extractors, chunker, sentence splitter, Voyage client, versioned ingest; semantic and keyword search; the real corpus ingested into Sandbox | `m2-ingest` → `sandbox` | Wed 7 Oct, about 16:30–18:00 (it ran in the afternoon; there was no class) | **Start the session, approve its plan, merge** |
 | M3 | Agent loop (Fable designs it in plan mode, Sonnet builds it), NDJSON stream, citation check, three-column UI, example questions, limits and budgets, upload, cleanup cron, environment badge; deployed to the Sandbox preview | `m3-agent` → `sandbox` | Thu 8 Oct 08:30–12:30 | **Start the session, review, merge** |
 | ★ | **FIRST CUT:** M1–M3 on the Sandbox preview URL with the real corpus | | **Thu 8 Oct ~13:00** | **Walk-through 13:00–16:00 with same-day fixes; apply Thu evening** |
-| M4 | Eval set (12–15 questions), `npm run eval` (hit@1/3/5, MRR), CI job with a pgvector service, job-summary table, threshold set from the first run | `m4-evals` → `sandbox` | Mon 12 Oct | **About 1.5 h of sessions plus review** |
-| M5 | Neon QA and production projects; GitHub Environments with production gated on Paul's approval; Vercel env scoping and `git.deploymentEnabled.master: false`; `pipeline.yml` (migrate, then ingest; production migrate, then deploy); first promotion sandbox → qa → master | `m5-environments` → `sandbox`, then promotion PRs | Mon 12 – Tue 13 Oct | **About 40 min of setup, plus the approvals in each promotion** |
-| M6 | README (architecture, running locally, "Local secrets" with `<!-- yanshuf-secrets -->`), demo script, responsive and Lighthouse pass, Claude PR review (`/install-github-app`) | `m6-readme` → `sandbox` → promotion | Tue 13 – Wed 14 Oct | **Final walk-through Wed 14 Oct** |
+| Fix | First-cut hardening and portfolio quick wins, from the walk-through and the validate review: a $0.10 budget reservation per question, a 100,000-token upload cap with per-batch embedding debits, a cross-site write guard, one server log line per run, interface fixes (status line, rendered Markdown in excerpts, labelled scores, header and footer links, favicon, Open Graph tags), the README, and an hourly Sandbox cleanup workflow | `fix/first-cut` → `sandbox` | Thu 8 Oct | **Review and merge; switch the default branch to `sandbox`; run `cleanup.yml` once by hand** |
+| Polish | Second validate pass fixes: a neutral "no citations" badge, AnswerPanel tests (T5), <sup> in Markdown excerpts, the README spend line, and a concurrency group in cleanup.yml that re-registers its schedule | `fix/sandbox-polish` → `sandbox` | Fri 9 Oct | **Review and merge; confirm a scheduled cleanup run** |
+| M4 | Eval set (12–15 questions), `npm run eval` (hit@1/3/5, MRR), CI job with a pgvector service, job-summary table, threshold set from the first run | `m4-evals` → `sandbox` | Tue 13 Oct | **About 1.5 h of sessions plus review** |
+| M5 | Neon QA and production projects; GitHub Environments with production gated on Paul's approval; Vercel env scoping and `git.deploymentEnabled.master: false`; `pipeline.yml` (migrate, then ingest; on `master` it waits for Paul's approval, migrates, ingests, then runs `vercel deploy --prod`, which Vercel builds), plus QA in `cleanup.yml`, the GitHub Actions trigger for `/api/cron/cleanup` that the fix PR adds for Sandbox, because Vercel runs cron jobs on production only; first promotion sandbox → qa → master; before the first promotion, a build-time env check (validate E4) and security headers (validate S3: `X-Content-Type-Options: nosniff`, `frame-ancestors` or `X-Frame-Options`, `Referrer-Policy`; a CSP only with a test); the Sandbox stable URL keeps working throughout, because Paul's job applications link to it | `m5-environments` → `sandbox`, then promotion PRs | Wed 14 Oct | **About 40 min of setup, plus the approvals in each promotion** |
+| M6 | README (architecture, running locally, "Local secrets" with `<!-- yanshuf-secrets -->`), demo script, responsive and Lighthouse pass, Claude PR review (brought forward to PR #15; see Model split); from the validate review: stop the agent when the visitor disconnects (E2), an explicit error for a `tool_use` stop with no tool block (E7), render or strip the model's headings and tables in the answer (E10), type `sessionId({ create: true })` as a string (E11), and an Excerpts message when an answer cites nothing; after the first promotion, the README's live link and the repository's About website point at production, with the Sandbox URL kept as the preview | `m6-readme` → `sandbox` → promotion | Thu 15 Oct | **Final walk-through Thu 15 Oct** |
 
-The full set is due Wed 14 Oct, with Thu 15 as buffer. Sunday 11 is TriviaFoundry's launch, so nothing is planned here that day.
+The full set was due Wed 14 Oct, with Thu 15 as buffer. M4 started a day late, on Tue 13, so M5 runs on Wed 14 and M6 on Thu 15, using the buffer. Sunday 11 is TriviaFoundry's launch, so nothing is planned here that day.
 
-**The tight spot is Wednesday evening.** M2 needs about three hours at the machine after class. If that slips, the first cut moves to Thursday evening, and the planning session tells Paul by Wednesday 21:00 so he can decide whether to apply anyway.
+**Wednesday 7 October had no class,** so S1 was done by 15:45 and M2 started straight after; M3 can follow the same evening. The first cut is due on Thursday 8 October in the morning, leaving the afternoon for Paul's walk-through and the application.
 
 Until the first promotion in M5, `master` holds only the chain. The first cut lives on `sandbox`, the integration branch. Vercel builds `master` as production when the project is imported in S1; that build fails harmlessly, because `master` has no app yet. The Dependabot PRs for the Python code (#1–#8) close when M1 merges, the same day the code leaves (a.3).
 
 ## Files that change
 - **Removed** (kept at tag `python-prototype`): `rag/`, `tests/`, `data/`, `docs/decisions/`, `pyproject.toml`, `pytest.ini`, `requirements.txt`, `requirements-dev.txt`, `.github/workflows/ci.yml` and `.github/dependabot.yml` (both replaced), `.env.example` (replaced). The untracked `.venv/`, `.mypy_cache/` and `.ruff_cache/` folders are deleted from disk.
 - **App:**
-  - `app/layout.tsx`, `app/page.tsx`, `components/*`
+  - `app/layout.tsx`, `app/page.tsx`, `app/icon.svg`, `components/*`
   - `app/api/{ask,upload,documents,documents/[id],health,cron/cleanup}/route.ts`
 - **Library:**
   - `lib/{env,db,embed,search,limits,pricing}.ts`
+  - `lib/{corpus,manifest,documents,session,upload,api,deps,run-state,inline-markdown,utils,evals}.ts`, the test helpers `lib/{fake-embedder,test-pdf}.ts` and `lib/agent/test-setup.ts`, and the upload fixture `lib/fixtures/acme-pay-terms.pdf`
   - `lib/ingest/{extract,chunk,index}.ts`
   - `lib/agent/{loop,tools,prompt,sentences,citations}.ts`
 - **Data:**
   - `db/migrations/0001_init.sql`
-  - `corpus/manifest.json`, `corpus/files/*` (committed), plus the Mojaloop `LICENSE` and `NOTICE`
-  - `evals/questions.json`
-- **Scripts:** `scripts/{migrate,corpus-fetch,ingest-corpus,eval}.ts`
-- **Pipelines:** `.github/workflows/{ci,evals,pipeline}.yml`, `.github/dependabot.yml`
+  - `corpus/manifest.json`, `corpus/files/*` (committed), plus the Mojaloop `LICENSE.md` (the repository ships no NOTICE)
+  - `evals/{questions,threshold}.json`
+- **Scripts:** `scripts/{migrate,corpus-fetch,ingest-corpus,retrieval-check,smoke-sql,eval,vercel-build}.ts`
+- **Pipelines:** `.github/workflows/{ci,cleanup,evals,pipeline}.yml`, `.github/dependabot.yml`
 - **Agent setup:** `AGENTS.md`, `CLAUDE.md`, `REVIEW.md`, `.claude/settings.json`, `.claude/hooks/{no-placeholders,production-gate}.mjs`, `.claude/agents/{verifier,architect}.md`
-- **Config and docs:** `vercel.json`, `.env.example`, `.gitattributes`, `.gitignore`, `.worktreeinclude`, `README.md`
+- **Config and docs:** `package.json`, `package-lock.json`, `tsconfig.json`, `next.config.ts`, `eslint.config.mjs`, `vitest.config.ts`, `postcss.config.mjs`, `app/globals.css`, `vercel.json`, `.env.example`, `.gitattributes`, `.gitignore`, `.worktreeinclude`, `README.md`, `docs/screenshot.png`. Scripts run through `tsx` with `--env-file-if-exists=.env.local`.
 
 ## Schema delta
 From nothing to the spec's four tables:
@@ -58,13 +61,14 @@ From nothing to the spec's four tables:
   - The `verifier` and `architect` subagents carry `model: fable` in their frontmatter, so they run on Fable whenever the Sonnet session calls them. `AGENTS.md` tells the session to call `verifier` before every PR, and `architect` after the same test fails twice.
 
   Fable has its own weekly allowance on Paul's Max plan (separate from the main limit; usage credits off), so splitting the work spreads it across two limits. The constraint block's "Target Model: Fable 5.1" line stays verbatim, and its rules apply to both models.
+- **First-pass PR review:** brought forward from M6 by Paul's decision on 9 Oct. PR #15 (`fix/pr-reviewer`) adds a reviewer on Opus 5.5 that applies REVIEW.md to every non-draft pull request from this repository. The Fable verifier still runs before each PR. Whether the reviewer gets its secret, and its spend, is Paul's decision, made with his other agent settings.
 - **App runtime:** Claude Sonnet 5.5 for the agent ($2 / $10 per M tokens); Voyage `voyage-4` for embeddings.
 
 ## Proof
 - **M1:**
   - `npm run lint`, `npm run typecheck`, `npm test` and `npm run build` pass locally and in CI.
   - Tests show `0001_init.sql` applied through `scripts/migrate.ts` on PGlite via `Db`, a cosine query on a 1024-dim vector returning the nearest row, and env validation rejecting an `ANTHROPIC_MODEL` missing from `lib/pricing.ts`.
-  - Each hook has been triggered once on purpose and blocked: a `TODO` comment in code, and `git push origin HEAD:sandbox`.
+  - Each hook has been triggered once on purpose and blocked: a `TODO` comment in code, and `git push --dry-run origin HEAD:sandbox` (a dry run, so nothing moves even if the hook failed).
 - **M2:**
   - Tests show:
     - every committed corpus file matches its manifest hash;
@@ -81,29 +85,41 @@ From nothing to the spec's four tables:
   - On the Sandbox preview, each of the four example questions gives at least one checked citation and none unchecked, and the steps stream live.
   - A small PDF upload is answerable, and the cleanup job removes it.
 - **First cut:** Paul's walk-through on the preview with the real corpus. Measured cost and latency per question replace the spec's estimates.
+- **Fix PR:**
+  - Tests show the budget reservation (one of ten simultaneous questions starts with $0.85 spent, and the window holds exactly the actual cost after every kind of run), the upload cap and the per-batch debit, the cross-site guard on each write route, and one log line per run.
+  - On the preview, `/api/health` reports Sandbox, a foreign `Origin` and `Sec-Fetch-Site: cross-site` get 403, a 500 KB text upload gets a 413, and the Mojaloop example shows rendered Markdown, labelled scores, the status line and a checked citation with no console error or 404.
+- **Polish PR:**
+  - Tests show the answer header and markers for checked, unchecked and absent citations, a declined answer with no badge, and no `<sup>` text left on any Mojaloop line.
+  - On the preview, an answer that cites nothing shows "no citations" in a neutral badge with no red box.
+  - After the merge, runs labelled Scheduled appear on the cleanup workflow page.
 - **M4:**
   - The job summary shows hit@1, hit@3, hit@5 and MRR.
   - A branch that breaks retrieval on purpose fails the job.
 - **M5:**
   - One change travels sandbox → qa → master.
   - Sandbox and QA builds migrate before building.
-  - The production pipeline waits for Paul's approval, migrates, then deploys.
+  - The production pipeline waits for Paul's approval, migrates, ingests, has Vercel build and deploy the commit, and its health step reports `production` and the newest migration.
   - `/api/health` reports a different database in each environment.
+  - Tests cover the build-time env check (a missing or blank variable, an unset model or budget, the wrong `APP_ENV` for production, `qa` and other previews, a pooled migration URL, URLs from two databases) and two migrate runs at once; the `m5-environments` preview build log shows the check passing and `nothing to apply` before `next build`.
+  - Every response carries `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY` and `Referrer-Policy: strict-origin-when-cross-origin`.
+  - On the production URL itself, before production is called live: `/api/health` shows production's database, one example question gives checked citations and none unchecked, an upload can be asked about and then deleted, and one Vercel cron cleanup run appears in the production logs.
 - **M6:**
   - The README renders on GitHub.
   - Lighthouse scores at least 90 for performance and accessibility on production.
   - The 5-minute demo has been rehearsed once end to end.
 
 ## Risks
-1. **Wednesday evening slips:** the first cut moves to Thursday evening (see above).
-2. **Voyage rate limits:** `voyage-4` allows 2,000 requests and 8M tokens a minute, at up to 1,000 texts or 320K tokens per request. The 0.4M-token corpus is a handful of requests and takes under a minute. Keep exponential backoff on 429s; no card is needed.
+1. **M3 slips past Thursday morning:** the walk-through and the application move to Thursday afternoon; the planning session flags it as soon as it's clear.
+2. **Voyage rate limits:** the account now has a payment method, so `voyage-4` runs at the standard limits (2,000 requests and 8M tokens a minute) and the 200M free tokens still apply. Without a card the limits were 3 requests and 10K tokens a minute (Voyage's 429 reply says so), which stretched M2's first ingest to about 25 minutes; with the card, a full ingest of the 0.18M-token corpus takes about a minute. Ingest keeps exponential backoff on 429s. A question's query embedding makes one attempt with a 5 s deadline and falls back to keyword search (spec feature 6). The app's 2M-token daily embedding budget and the $5 project alert are the only spend controls, because Voyage has no hard cap.
 3. **A corpus source refuses scripted downloads:** Paul downloads it once in a browser into `corpus/files/`, and the hash goes into the manifest.
 4. **Multi-call agent latency on Vercel:** `maxDuration` of 120 s (Pro allows up to 800), streaming so progress is visible, and the round cap.
 5. **PDF extraction on the CFPB guide's tables:** inspect the extracted text in M2 and adjust the packing and the splitter's table-row rule.
 6. **Claude answers without citing:** the system prompt requires citations, the answer header shows the checked count, and the first-cut walk-through tests it.
-7. **Next.js 16.4.0 is one day old:** pinned exactly, with 16.3.x as the fallback.
+7. **Next.js 16.4.0 is one day old:** pinned exactly, with 16.3.x as the fallback. TypeScript stays on `~5.9.3` (patch updates only), because npm's `latest` is the 7.x Go compiler; Dependabot ignores TypeScript majors.
 8. **Neon cold start after 5 idle minutes:** about a second on the first query. Acceptable for a demo.
 9. **Windows specifics:** hooks run as Node scripts under Git Bash with `CLAUDE_CODE_USE_POWERSHELL_TOOL=0`, and `.gitattributes` pins LF.
+10. **Scheduled workflows stop after 60 idle days:** GitHub disables a repository's schedules after 60 days without activity, so cleanup.yml would stop silently. Any push keeps them alive; M5's pipeline will.
+11. **A variable missing or mistyped on QA or production:** the build-time env check fails that build with the variable's name. Fix it in Vercel, then redeploy (for production, re-run the Release job).
 
 ## Rejected alternatives
 - **Finishing the Python prototype:** the posting asks for Node.js and React, and the prototype's design flaws go deeper than a fix.
@@ -121,6 +137,7 @@ From nothing to the spec's four tables:
 - **A Vercel protection bypass token for previews (c):** interviewers would need a special link. Protection off is simpler for a public demo whose limits already protect the keys.
 - **Accepting broken feature previews until merge (b.11):** a feature preview that fails against the old schema can't be reviewed. Additive migrations applied at preview build time keep every preview working.
 - **Vercel auto-deploying production on merge (b.12):** new code could reach the old schema while the migration waits for approval. The pipeline migrates first, then deploys.
+- **Building production in GitHub (`vercel build`, then `vercel deploy --prebuilt --prod`):** Vercel Secret values are write-only, so `vercel pull` writes "[SENSITIVE]" in their place, and a build in GitHub could neither check nor use production's secrets without copying them into GitHub too. After approval and migration, the pipeline has Vercel build the commit instead (Paul, 13 Oct).
 - **Forced `tool_choice` (`any` or `tool`) for the final round (b.5):** it returns a 400 on Sonnet 5.5. `none` forces the answer instead.
 - **Adaptive thinking with `display: "updates"` (b.5):** it needs a beta header. `between_tools` is generally available on Sonnet 5.5 and gives the same progress updates without up-front thinking.
 - **Storing sentence blocks (b.2):** the splitter is deterministic, so recomputing the blocks from the stored chunk keeps the schema minimal and the check honest.
@@ -153,7 +170,10 @@ From nothing to the spec's four tables:
   - installing TypeScript 7 (pin `~5.9.3`);
   - using `next lint`;
   - bumping `@electric-sql/pglite` without `@electric-sql/pglite-pgvector`;
-  - connecting migrations through a pooled transaction endpoint.
+  - connecting migrations through a pooled transaction endpoint;
+  - retrying or working around a destructive command blocked by Paul's user-level GateGuard hook (`git rm -r`, `rm -rf`, `Remove-Item -Recurse`): give Paul the exact command, folder and window, and wait.
+
+`AGENTS.md` also keeps the `nextjs-agent-rules` block that `next dev` writes and re-adds: a pointer to the version-matched Next.js docs in `node_modules/next/dist/docs/`.
 
 **`CLAUDE.md`:** `@AGENTS.md`, followed by the constraint block below, verbatim.
 
@@ -220,12 +240,13 @@ The message tells the agent to push a named branch and open a PR.
 
 **Also in M1:**
 - **`.gitattributes`:** `* text=auto eol=lf`.
-- **`.gitignore`:** `node_modules/`, `.next/`, `.env`, `.env*.local`, `.claude/worktrees/`, `.claude/settings.local.json`, `coverage/`.
+- **`.gitignore`:** `node_modules/`, `.next/`, `.env`, `.env*.local`, `.claude/worktrees/`, `.claude/settings.local.json`, `coverage/`, `next-env.d.ts`, `*.tsbuildinfo` (generated by `next build` and incremental `tsc`).
 - **`.worktreeinclude`:** `.env.local`.
-- **`.env.example`:** key names only — `DATABASE_URL`, `MIGRATION_DATABASE_URL`, `VOYAGE_API_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `DAILY_ANTHROPIC_BUDGET_USD`, `IP_HASH_SECRET`, `CRON_SECRET`, `APP_ENV`.
+- **`.env.example`:** key names, with safe defaults `ANTHROPIC_MODEL=claude-sonnet-5-5`, `DAILY_ANTHROPIC_BUDGET_USD=1.00` and `APP_ENV=local`; every other value blank.
+- **`lib/env.ts`:** validates eight runtime variables (`DATABASE_URL`, `VOYAGE_API_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `DAILY_ANTHROPIC_BUDGET_USD`, `IP_HASH_SECRET`, `CRON_SECRET`, `APP_ENV`). `MIGRATION_DATABASE_URL` is read only by `scripts/migrate.ts`, never by the app. A blank value fails validation; blank is not unset.
 - **`vercel.json`:** `regions: ["fra1"]` and `git.deploymentEnabled.master: false`. The second takes effect only once M5 promotes it to `master`, so production deploys come from the pipeline from the start.
-- **`ci.yml`:** on every PR and on pushes to `sandbox`, `qa` and `master`, runs `npm ci`, lint, typecheck, test and build.
-- **`dependabot.yml`:** weekly npm updates, with the two PGlite packages in one group, and weekly GitHub Actions updates.
+- **`ci.yml`:** on every PR and on pushes to `sandbox`, `qa` and `master`, runs `npm ci`, lint, typecheck, test and build. It runs on Node 24, which Vercel uses too.
+- **`dependabot.yml`:** weekly npm updates, with the two PGlite packages in one group and TypeScript major versions ignored, and weekly GitHub Actions updates.
 - **Home page in M1:** the app name, a one-line description, the environment badge, and links to the intent, spec and plan on GitHub.
 
 ## CLAUDE.md constraint block (verbatim, from the planning brief)
