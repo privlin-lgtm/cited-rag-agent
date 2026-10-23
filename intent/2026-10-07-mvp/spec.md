@@ -4,6 +4,7 @@ Revised 2026-10-08 with the first-cut fixes (`fix/first-cut`): features 2, 7, 9,
 Revised 2026-10-08 with the second validate pass polish (`fix/sandbox-polish`): features 8, 9 and 10.
 Revised 2026-10-13 with M4 (`m4-evals`): features 3, 6, 8, 11 and 13, Screens / routes and AI features.
 Revised 2026-10-14 with M5 (`m5-environments`): features 11 and 12 and Screens / routes, after Paul's decisions of 13 Oct.
+Revised 2026-10-21 with M6 (`m6-readme`): features 6, 8, 9, 10 and 12, Concerns, Screens / routes and D3.
 
 ## Stack
 - **App:** Next.js 16.4.0 (App Router, Route Handlers on the Node runtime), React 19.3.0, TypeScript `~5.9.3`, Tailwind CSS 4 with a few shadcn/ui components. Every version is pinned exactly except TypeScript (`~5.9.3`, patch updates only), and the lockfile is committed. Lint runs through the ESLint CLI, since `next lint` is gone in 16. Hosted on Vercel (Paul's Pro account), with functions in `fra1`.
@@ -76,7 +77,7 @@ Revised 2026-10-14 with M5 (`m5-environments`): features 11 and 12 and Screens /
      - `list_documents` returns plain text only. A tool result never mixes `search_result` blocks with text blocks.
    - **Rounds:** at most 6 tool rounds. The call after round 6 sends `tool_choice: { type: "none" }`. Forced tool use (`any` or `tool`) returns a 400 on Sonnet 5.5, so it is never sent.
    - **Stop reasons:**
-     - `tool_use` runs the tools;
+     - `tool_use` runs the tools; a `tool_use` stop that carries no `tool_use` block ends the run with the error "the model stopped for a tool call but sent no tool_use block";
      - `end_turn` finishes;
      - `max_tokens` finishes with the answer marked "cut off";
      - `refusal` ends the run with "Claude declined to answer this question" and no citations;
@@ -87,6 +88,7 @@ Revised 2026-10-14 with M5 (`m5-environments`): features 11 and 12 and Screens /
      - Refined queries should use the documents' own terms.
      - When the documents don't contain the answer, the agent says so plainly.
    - **Voyage failure** (b.15): if embedding the query fails, `search_documents` runs keyword search for that call. The step event carries `fallback: "keyword"`, and the timeline labels it "keyword fallback (embeddings unavailable)".
+   - **The visitor leaves** (validate E2): when the answer stream is cancelled, the run stops before its next model call and before running any more tools. A model call already in flight finishes, so its cost is recorded from its `usage`; the run then ends without an answer, and the $0.10 hold is released as on every other path. Aborting the call in flight would lose its `usage`, and with it the true-up.
 7. **Visible steps.** The answer route streams newline-delimited JSON events:
    - `step`: `{ round, reason, tool, input, hits: [{ file, locator, score }], fallback? }`. The `reason` is the progress text Claude returned before the tool call, when there is any.
    - `answer`: text deltas.
@@ -108,8 +110,10 @@ Revised 2026-10-14 with M5 (`m5-environments`): features 11 and 12 and Screens /
      - A chunk cited through several indices is shown once, with all its cited sentences highlighted.
      - A failed citation shows in red as "unchecked", never as checked.
      - The answer header reads "N of M citations checked". An answer that cites nothing (such as a plain "the documents don't cover this") reads "no citations" in a neutral badge; red is kept for answers whose citations were given and none passed the check. A refusal by the model (stop reason `refusal`) shows only "Claude declined to answer this question.", with no badge.
+     - **The answer's own formatting:** the answer renders paragraphs, `**bold**` and list items (indented items join the same list). A Markdown heading line (`#` to `######`) shows as a bold paragraph without its markers. A run of two or more lines that start and end with `|` shows as a table: the first row is the header when a separator row (`|---|`) follows it, the separator is not shown, and each citation marker stays in the cell where it occurs. A wide table scrolls sideways inside the answer column.
 9. **Excerpts.** Beside the answer, each cited chunk shows its file, its locator and the chunk text with the cited sentences highlighted, plus a link to the source document.
    - **Markdown documents:** for a file whose name ends in `.md`, the excerpt renders inline Markdown for display only: `**bold**`, `` `code` `` (also inside bold), `[text](target)` as its text, `<br />` as a line break, `<sup>…</sup>` as superscript with a link inside shown as its text, and a heading marker (`#` to `######`) at the start of a block dropped. The highlighted blocks, the stored text and the citation check are unchanged. Other files show the stored text as it is.
+   - **When there is nothing to show:** before any question, the column says what will appear there. After an answer that cites nothing, it reads "This answer cites no passage, so there is no excerpt to show. The steps show what was searched." After an answer whose citations all failed the check, it reads "None of this answer's citations passed the check, so no excerpt is shown." After Claude declines, it reads "Claude declined to answer, so there is no excerpt to show."
 10. **Abuse and spend limits** (b.8, c).
     - **Windows:** fixed. `window_start` is the start of the UTC hour or UTC day.
     - **Buckets:**
@@ -123,7 +127,7 @@ Revised 2026-10-14 with M5 (`m5-environments`): features 11 and 12 and Screens /
       - **True-up:** cost (in micro-dollars) is added after each model call, from the response's `usage`, and the $0.10 is released when the run ends on any path (complete, cut off, declined, model error, a thrown error, a client that left). The window then holds the actual cost. A run killed by the platform before it ends leaves its $0.10 held until the window expires.
       - **Overshoot bound:** runs that start together can pass the budget by at most (budget ÷ $0.10) × (a run's cost − $0.10). The 15-an-hour limit per address and the 120 s function cap make that implausible for a demo.
       - **Embedding tokens** are debited as each Voyage response arrives, batch by batch, for uploads and questions alike, so tokens spent before a failure still count. An upload's estimate (feature 2) is checked against the day's total before the first batch.
-    - **Server log:** when a run ends, `handleAsk` writes one `console.info` line of JSON: `event` ("ask"), `status` (`complete`, `cut_off`, `declined` or `error`), `model`, `rounds` (tool rounds run), `toolCalls`, `keywordFallbacks`, the four token counts, `costUsd` and `latencyMs`. It never holds the question, document ids, the session id or the address hash.
+    - **Server log:** when a run ends, `handleAsk` writes one `console.info` line of JSON: `event` ("ask"), `status` (`complete`, `cut_off`, `declined`, `error`, or `abandoned` when the visitor left before the answer), `model`, `rounds` (tool rounds run), `toolCalls`, `keywordFallbacks`, the four token counts, `costUsd` and `latencyMs`. It never holds the question, document ids, the session id or the address hash.
     - **IP:** the first address in `x-forwarded-for`, which Vercel sets. The hash is HMAC-SHA256 keyed with `IP_HASH_SECRET`, first 16 hex characters.
     - **Messages:** each refusal says which limit was hit and when it resets.
 11. **Evals** (M4, b.9).
@@ -147,7 +151,7 @@ Revised 2026-10-14 with M5 (`m5-environments`): features 11 and 12 and Screens /
     - **Sandbox and QA:** after the check, a preview build runs `npm run migrate` with that environment's `MIGRATION_DATABASE_URL`, then `next build`. A feature preview therefore applies its own schema change to Sandbox before its code runs.
     - **Production:** Vercel's automatic deploys from `master` are off (`git.deploymentEnabled.master: false` in `vercel.json`). On a push to `master`, `pipeline.yml` waits for Paul's approval in the GitHub `production` environment, migrates, ingests, then runs `vercel deploy --prod`: Vercel builds the commit with production's own variables, so the env check sees the real values. A build in GitHub (`vercel deploy --prebuilt`) would see only "[SENSITIVE]" placeholders, because Vercel Secret values are write-only. The job then reads the new deployment's `/api/health` and fails unless it reports `production` and the newest migration.
     - **Pipeline on `sandbox` and `qa`:** the same job migrates and ingests, with no approval and no deploy; Vercel's Git integration deploys those branches.
-    - **Vercel env vars:** Preview points at Sandbox, with branch overrides that point `qa` at QA (`DATABASE_URL`, `MIGRATION_DATABASE_URL`, `APP_ENV`, `CRON_SECRET`). Production points at production and has its own Anthropic and Voyage keys, `IP_HASH_SECRET` and `CRON_SECRET`; it has no `MIGRATION_DATABASE_URL`, because the pipeline migrates production.
+    - **Vercel env vars:** Preview points at Sandbox, with branch overrides that point `qa` at QA (`DATABASE_URL`, `MIGRATION_DATABASE_URL`, `APP_ENV`, `CRON_SECRET`, and `DAILY_ANTHROPIC_BUDGET_USD` at 0.50). Production points at production and has its own Anthropic and Voyage keys, `IP_HASH_SECRET` and `CRON_SECRET`; it has no `MIGRATION_DATABASE_URL`, because the pipeline migrates production.
     - **GitHub Environments:** `sandbox`, `qa` and `production` each hold their database's direct endpoint as `MIGRATION_DATABASE_URL`. `production` also holds `VERCEL_TOKEN` and the variables `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`, requires Paul's approval and accepts only `master`. GitHub treats environment names case-insensitively, so it is the same environment as the "Production" one Vercel's GitHub integration created.
     - **Credentials stay off the dev machine:** QA and production credentials live only in GitHub and Vercel, and `.env.local` holds Sandbox only.
     - **Corpus:** the pipeline runs `npm run ingest:corpus` after every migration. Documents whose hash and `INGEST_VERSION` are unchanged are skipped without a Voyage call, so only a changed manifest or a new version spends tokens. It uses the repository's CI Voyage key.
@@ -159,7 +163,7 @@ Revised 2026-10-14 with M5 (`m5-environments`): features 11 and 12 and Screens /
 14. **Preview access** (c, D5). Vercel Deployment Protection is off for this project, so the Sandbox preview opens at its stable branch URL without a Vercel login. The limits in feature 10 protect the keys.
 
 ## Screens / routes
-- `/`: one responsive page. On desktop it has three columns: documents (corpus with licence badges, session uploads, scope checkboxes); the question with the agent timeline and the answer; excerpts. Below 1024 px they stack, with excerpts opening under the answer.
+- `/`: one responsive page. On desktop it has three columns: documents (corpus with licence badges, session uploads, scope checkboxes); the question with the agent timeline and the answer; excerpts. Below 1024 px they stack in the page's own order: the question, steps and answer, then the excerpts, then the documents. The desktop columns are placed by the grid rather than by CSS `order`, so the reading and tab order are the order a phone shows.
 - **Cross-site guard:** `POST /api/ask`, `POST /api/upload` and `DELETE /api/documents/:id` answer 403 before any reservation or database work when `Sec-Fetch-Site` is `cross-site` or `same-site`, or when an `Origin` header is present and its host differs from the request's host (the `Host` header). A request with neither header, such as curl or a test, passes. A third-party page therefore cannot make its visitors' browsers ask questions or upload.
 - `POST /api/ask`: `{ question (1–500 chars), documentIds? }` → NDJSON stream. Input is validated with zod, and the limits are checked before any model call.
 - `POST /api/upload`: multipart, one file → `{ document }` once ingested, or a 4xx with the reason.
@@ -234,7 +238,7 @@ OCR; MongoDB; accounts and logins; storing agent runs or chat history; re-rankin
 1. **Public demo on paid keys.** Covered by the limits in feature 10 and the workspace limit. Voyage has budget alerts, not hard caps. The account now has a payment method, which unlocks the standard rate limits; the 200M free tokens still apply. Spend is controlled by the app's 2M-token daily embedding budget (feature 10) and the project's $5 monthly alert (email only); Voyage itself has no hard cap.
 2. **Licences.**
    - CFPB and eCFR texts are US federal works in the public domain (17 U.S.C. §105).
-   - PSD2 is reused from EUR-Lex with the source acknowledged. The manifest records the acknowledgement wording and links EUR-Lex's legal notice; the wording is still to be checked against that notice, and repeated in the README, before M6.
+   - PSD2 is reused from EUR-Lex with the source acknowledged. The manifest records the acknowledgement wording and links EUR-Lex's legal notice; the wording was checked against that notice on 19 October 2026, and the README repeats it. The notice authorises reuse of the legal documents published in EUR-Lex under the Commission's reuse policy (Decision 2011/833/EU); the decision itself covers the Commission's own documents, so the manifest's licence names the notice.
    - Mojaloop's docs are Apache-2.0 apart from the one page noted under feature 1. The repository ships `LICENSE.md` and no NOTICE, so `LICENSE.md` goes beside the files.
 3. **Corpus sources that refuse scripted downloads.** Paul downloads that file once in a browser. The file is committed, so CI never depends on the source.
 4. **Vercel request limit.** Bodies are capped at 4.5 MB, hence the 4 MB upload limit.
@@ -246,7 +250,7 @@ OCR; MongoDB; accounts and logins; storing agent runs or chat history; re-rankin
 ## Decisions confirmed by approving this spec
 - **D1 Hosting:** Neon Free, one project per environment, $0 a month. The alternative was Supabase: Sandbox on the free slot, plus QA and production on Pro in a separate organisation at about $35 a month. Supabase's free projects also pause after a week without traffic.
 - **D2 Anthropic spend:** the workspace monthly limit is $20, set at setup to leave room in the organisation's $50 limit for Paul's other projects, and the app's daily budget is $1.00 (`DAILY_ANTHROPIC_BUDGET_USD`), raised through that env var on interview days.
-- **D3 Production release:** the pipeline migrates and then deploys, after Paul approves in GitHub. Vercel's automatic deploys from `master` are off.
+- **D3 Production release:** after Paul approves in GitHub, the pipeline migrates, ingests the corpus, then has Vercel build and deploy the commit and checks `/api/health`. Vercel's automatic deploys from `master` are off.
 - **D4 Corpus files:** committed to the repo (3.4 MB), with their licences beside them.
 - **D5 Preview protection:** Vercel Deployment Protection is off for this project.
 - **D6 Uploads on production:** open, within the limits in feature 10.

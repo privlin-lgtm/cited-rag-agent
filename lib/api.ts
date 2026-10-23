@@ -11,7 +11,7 @@ import { ingestUpload, MAX_UPLOAD_BYTES, UploadError } from './upload';
 export type ApiDeps = {
   db: Db;
   now: () => Date;
-  sessionId: (options: { create: boolean }) => Promise<string | undefined>;
+  sessionId: { (options: { create: true }): Promise<string>; (options: { create: false }): Promise<string | undefined> };
   ipSecret: string;
   cronSecret: string;
   budgetUsd: number;
@@ -71,11 +71,13 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
     const started = performance.now();
     const encoder = new TextEncoder();
     let closed = false;
+    const abort = new AbortController();
 
     return ndjson(
       new ReadableStream<Uint8Array>({
         cancel() {
           closed = true;
+          abort.abort();
         },
         async start(controller) {
           const write = (event: object) => {
@@ -83,7 +85,7 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
           };
           const totals = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
           let cost = 0;
-          const run = { status: 'error' as 'complete' | 'cut_off' | 'declined' | 'error', rounds: 0, toolCalls: 0, keywordFallbacks: 0 };
+          const run = { status: 'error' as 'complete' | 'cut_off' | 'declined' | 'error' | 'abandoned', rounds: 0, toolCalls: 0, keywordFallbacks: 0 };
           const result = () => ({ model: deps.model.id, ...totals, costUsd: cost, latencyMs: Math.round(performance.now() - started) });
           let recording: Promise<unknown> = Promise.resolve();
           const record = ({ anthropic: usage }: Extract<AgentEvent, { type: 'usage' }>) => {
@@ -101,7 +103,7 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
           const queryEmbed = debited(deps.queryEmbedder, deps);
           try {
             try {
-              await runAgent(
+              const ended = await runAgent(
                 {
                   model: deps.model.call,
                   modelId: deps.model.id,
@@ -112,6 +114,7 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
                   },
                   scope: documentIds ?? [...allowed],
                   sourceUrlOf: (documentId) => sourceUrls.get(documentId) ?? null,
+                  signal: abort.signal,
                 },
                 question,
                 (event) => {
@@ -128,6 +131,7 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
                   write(event);
                 },
               );
+              if (ended === 'abandoned') run.status = 'abandoned';
               await recording;
             } catch (error) {
               run.status = 'error';
@@ -150,7 +154,7 @@ export const handleUpload = (request: Request, deps: ApiDeps) =>
     if (Number(request.headers.get('content-length') ?? 0) > MAX_UPLOAD_BYTES + BODY_SLACK_BYTES) return Response.json({ error: 'The file is larger than 4 MB.' }, { status: 413 });
     const file = (await request.formData().catch(() => null))?.get('file');
     if (!(file instanceof File)) return Response.json({ error: 'Send one file in the "file" field of a multipart form.' }, { status: 400 });
-    const sessionId = (await deps.sessionId({ create: true })) ?? '';
+    const sessionId = await deps.sessionId({ create: true });
     await reserveUpload(deps.db, clientKey(request.headers, deps.ipSecret), deps.now());
     await assertEmbedBudget(deps.db, deps.now());
     const result = await ingestUpload(deps.db, debited(deps.documentEmbedder, deps), sessionId, file.name, new Uint8Array(await file.arrayBuffer()), (estimatedTokens) =>

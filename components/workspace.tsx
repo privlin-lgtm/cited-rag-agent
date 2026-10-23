@@ -118,26 +118,7 @@ export function Workspace({ env, examples, initialDocuments }: { env: string; ex
       </header>
 
       <main className="grid flex-1 gap-8 lg:grid-cols-[17rem_minmax(0,1fr)_22rem]">
-        <div className="order-3 lg:order-1">
-          <DocumentsPanel
-            documents={documents}
-            selected={selected}
-            onToggle={(id) =>
-              setSelected((current) => {
-                const next = new Set(current);
-                if (!next.delete(id)) next.add(id);
-                return next;
-              })
-            }
-            onToggleAll={() => setSelected(selected.size < documents.length ? new Set(documents.map(({ id }) => id)) : new Set())}
-            onUpload={upload}
-            onDelete={remove}
-            uploading={uploading}
-            uploadError={uploadError}
-          />
-        </div>
-
-        <div className="order-1 min-w-0 space-y-6 lg:order-2">
+        <div className="min-w-0 space-y-6 lg:col-start-2 lg:row-start-1">
           <form
             onSubmit={(event) => {
               event.preventDefault();
@@ -194,8 +175,27 @@ export function Workspace({ env, examples, initialDocuments }: { env: string; ex
           <AnswerPanel run={run} running={running} problem={problem} />
         </div>
 
-        <div className="order-2 lg:order-3">
-          <ExcerptsPanel excerpts={excerpts} noAnswer={!run.citations && Boolean(run.error)} />
+        <div className="lg:col-start-3 lg:row-start-1">
+          <ExcerptsPanel excerpts={excerpts} noAnswer={!run.citations && Boolean(run.error)} citations={run.citations} />
+        </div>
+
+        <div className="lg:col-start-1 lg:row-start-1">
+          <DocumentsPanel
+            documents={documents}
+            selected={selected}
+            onToggle={(id) =>
+              setSelected((current) => {
+                const next = new Set(current);
+                if (!next.delete(id)) next.add(id);
+                return next;
+              })
+            }
+            onToggleAll={() => setSelected(selected.size < documents.length ? new Set(documents.map(({ id }) => id)) : new Set())}
+            onUpload={upload}
+            onDelete={remove}
+            uploading={uploading}
+            uploadError={uploadError}
+          />
         </div>
       </main>
 
