@@ -2,8 +2,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { CitationCheck, Excerpt } from '../lib/agent/citations';
 import type { StepEvent } from '../lib/agent/loop';
+import type { Notice } from '../lib/notice';
 import { initialRun, type CitationsEvent, type RunState } from '../lib/run-state';
 import { AnswerPanel } from './answer-panel';
+import { DocumentsPanel } from './documents-panel';
 import { ExcerptsPanel } from './excerpts-panel';
 import { Timeline } from './timeline';
 import { Workspace } from './workspace';
@@ -20,7 +22,7 @@ const step = (overrides: Partial<StepEvent> = {}): StepEvent => ({
 });
 
 describe('AnswerPanel status line', () => {
-  const answer = (run: RunState, running: boolean, problem?: string) => renderToStaticMarkup(<AnswerPanel run={run} running={running} problem={problem} />);
+  const answer = (run: RunState, running: boolean, problem?: Notice) => renderToStaticMarkup(<AnswerPanel run={run} running={running} problem={problem} />);
   const afterFirstStep: RunState = { ...initialRun, steps: [step()] };
   const citations: CitationsEvent = { type: 'citations', status: 'complete', segments: [{ text: 'Thirty minutes.', refs: [] }], results: [], excerpts: [] };
 
@@ -34,8 +36,49 @@ describe('AnswerPanel status line', () => {
     expect(answer({ ...afterFirstStep, pending: 'Thirty min' }, true)).toContain('Thirty min');
     expect(answer({ ...afterFirstStep, citations }, true)).not.toContain(STATUS);
     expect(answer({ ...afterFirstStep, error: { type: 'error', message: 'Overloaded', excerpts: [] } }, true)).not.toContain(STATUS);
-    expect(answer(afterFirstStep, true, 'The connection was lost.')).not.toContain(STATUS);
+    expect(answer(afterFirstStep, true, { message: 'The connection was lost.', limit: false })).not.toContain(STATUS);
     expect(answer(afterFirstStep, false)).not.toContain(STATUS);
+  });
+});
+
+describe('AnswerPanel problems and errors', () => {
+  const answer = (run: RunState, problem?: Notice) => renderToStaticMarkup(<AnswerPanel run={run} running={false} problem={problem} />);
+  const sentence = 'You can try again at 15:00.';
+
+  it('shows a limit in the neutral box with its reset sentence, not the red one', () => {
+    const html = answer(initialRun, { message: `This demo takes 15 questions an hour from each visitor, and you've reached that. ${sentence}`, limit: true });
+    expect(html).toContain('You can try again at 15:00.');
+    expect(html).toContain('border-zinc-300');
+    expect(html).not.toMatch(/bg-red-50|text-red-800/);
+  });
+
+  it('keeps any other problem in the red box', () => {
+    const html = answer(initialRun, { message: 'The request failed (HTTP 500).', limit: false });
+    expect(html).toContain('bg-red-50');
+    expect(html).toContain('The request failed (HTTP 500).');
+  });
+
+  it('shows the visitor sentence under "No answer generated." in the red box', () => {
+    const message = 'The demo has reached its spending limit for now. Please try again later.';
+    const html = answer({ ...initialRun, error: { type: 'error', message, excerpts: [] } });
+    expect(html).toContain('No answer generated.');
+    expect(html).toContain(message);
+    expect(html).toContain('bg-red-50');
+    expect(html).not.toContain('{');
+  });
+});
+
+describe('DocumentsPanel upload notice', () => {
+  const panel = (uploadError: Notice) =>
+    renderToStaticMarkup(<DocumentsPanel documents={[]} selected={new Set()} onToggle={() => {}} onToggleAll={() => {}} onUpload={() => {}} onDelete={() => {}} uploading={false} uploadError={uploadError} />);
+
+  it('shows an upload limit in neutral text and any other upload problem in red', () => {
+    const limit = panel({ message: 'This demo takes 10 uploads a day from each visitor, and you\'ve reached that. You can try again tomorrow at 02:00.', limit: true });
+    expect(limit).toContain('text-zinc-600');
+    expect(limit).toContain('You can try again tomorrow at 02:00.');
+    expect(limit).not.toContain('text-red-700');
+    const other = panel({ message: 'The file is larger than 4 MB.', limit: false });
+    expect(other).toContain('text-red-700');
   });
 });
 
@@ -89,6 +132,51 @@ describe('AnswerPanel citation header and markers', () => {
     expect(html).toContain('Claude declined to answer this question.');
     expect(html).not.toMatch(/no citations|citations checked|rounded-full/);
     expect(html).not.toContain(NOT_CHECKED);
+  });
+});
+
+describe("AnswerPanel formatting of the model's text", () => {
+  const checked: CitationCheck = { ok: true, excerpt: 1, chunkId: '10', blocks: [0, 1] };
+  const answer = (segments: CitationsEvent['segments'], results: CitationCheck[] = []) =>
+    renderToStaticMarkup(<AnswerPanel run={{ ...initialRun, citations: { type: 'citations', status: 'complete', segments, results, excerpts: [] } }} running={false} />);
+
+  it('shows a heading line as a bold paragraph, without its markers or a heading element', () => {
+    const html = answer([{ text: '## Summary\nA sender has 30 minutes to cancel.', refs: [] }]);
+    expect(html).not.toContain('#');
+    expect(html.match(/<h[1-6]/g)).toEqual(['<h2']);
+    expect(html).toMatch(/<p class="[^"]*font-semibold[^"]*"><span>Summary<\/span><\/p>/);
+    expect(html).toContain('<span>A sender has 30 minutes to cancel.</span>');
+  });
+
+  it('shows a table split across segments as one table, with the separator hidden and the citation marker in its cell', () => {
+    const html = answer(
+      [
+        { text: 'Fees:\n| Fee | Amount |\n|---|---|\n| **Transfer** | $5 ', refs: [0] },
+        { text: '|\n| Exchange rate | 1% |', refs: [] },
+      ],
+      [checked],
+    );
+    expect(html.match(/<table/g)).toHaveLength(1);
+    expect(html.match(/<th /g)).toHaveLength(2);
+    expect(html.match(/<td /g)).toHaveLength(4);
+    expect(html).not.toMatch(/---|\|/);
+    expect(html).toContain('<strong>Transfer</strong>');
+    expect(html.split('<td').find((cell) => cell.includes('$5'))?.split('</td>')[0]).toContain('href="#excerpt-1"');
+    expect(html).toMatch(/<div class="[^"]*overflow-x-auto[^"]*"><table/);
+  });
+
+  it('keeps a single line with a pipe as a paragraph', () => {
+    for (const text of ['Fees | Taxes', '| Fees | Taxes |']) {
+      const html = answer([{ text, refs: [] }]);
+      expect(html).not.toContain('<table');
+      expect(html).toContain(`<span>${text}</span></p>`);
+    }
+  });
+
+  it('joins an indented list item to the list of its neighbours', () => {
+    const html = answer([{ text: '- one\n  - two', refs: [] }]);
+    expect(html.match(/<ul/g)).toHaveLength(1);
+    expect(html.match(/<li>/g)).toHaveLength(2);
   });
 });
 
@@ -146,6 +234,31 @@ describe('ExcerptsPanel', () => {
     expect(html).toContain('##### 3.2.1 Heading');
     expect(html).not.toContain('<strong>');
   });
+
+  const BEFORE = 'The passages behind each checked citation appear here, with the cited sentences highlighted.';
+  const CITES_NONE = 'This answer cites no passage, so there is no excerpt to show. The steps show what was searched.';
+  const NONE_PASSED = "None of this answer's citations passed the check, so no excerpt is shown.";
+  const DECLINED = 'Claude declined to answer, so there is no excerpt to show.';
+  const ended = (status: CitationsEvent['status'], results: CitationCheck[], excerpts: Excerpt[] = []): CitationsEvent => ({ type: 'citations', status, segments: [], results, excerpts });
+  const empty = (citations?: CitationsEvent) => renderToStaticMarkup(<ExcerptsPanel excerpts={citations?.excerpts ?? []} noAnswer={false} citations={citations} />).replaceAll('&#x27;', "'");
+
+  it.each([
+    ['before any answer', undefined, BEFORE],
+    ['after an answer that cites nothing', ended('complete', []), CITES_NONE],
+    ['after a cut-off answer that cites nothing', ended('cut_off', []), CITES_NONE],
+    ['after an answer whose citations all failed the check', ended('complete', [{ ok: false, reason: 'text' }, { ok: false, reason: 'index' }]), NONE_PASSED],
+    ['after Claude declined', ended('declined', []), DECLINED],
+  ])('says why there is nothing to show %s', (_name, citations, message) => {
+    const html = empty(citations);
+    expect(html).toContain(message);
+    for (const other of [BEFORE, CITES_NONE, NONE_PASSED, DECLINED].filter((text) => text !== message)) expect(html).not.toContain(other);
+  });
+
+  it('shows none of those messages when there are excerpts', () => {
+    const html = empty(ended('complete', [{ ok: true, excerpt: 1, chunkId: '1', blocks: [0, 1] }], [excerpt('rule.txt', [{ text: 'Cancel within 30 minutes.', cited: true }])]));
+    for (const message of [BEFORE, CITES_NONE, NONE_PASSED, DECLINED]) expect(html).not.toContain(message);
+    expect(html).toContain('Cancel within 30 minutes.');
+  });
 });
 
 describe('Workspace header and footer', () => {
@@ -159,5 +272,14 @@ describe('Workspace header and footer', () => {
   it('links the intent, spec and plan on the default branch', () => {
     for (const file of ['intent', 'spec', 'plan']) expect(html).toContain(`href="https://github.com/privlin-lgtm/cited-rag-agent/blob/HEAD/intent/2026-10-07-mvp/${file}.md"`);
     expect(html).not.toContain('blob/master');
+  });
+
+  it('puts the answer, then the excerpts, then the documents in the markup, the order a phone shows, with no CSS order', () => {
+    const at = (label: string) => html.indexOf(`<section aria-label="${label}"`);
+    expect(at('What the agent did')).toBeGreaterThan(html.indexOf('id="question"'));
+    expect(at('Answer')).toBeGreaterThan(at('What the agent did'));
+    expect(at('Excerpts')).toBeGreaterThan(at('Answer'));
+    expect(at('Documents')).toBeGreaterThan(at('Excerpts'));
+    expect(html).not.toMatch(/\border-\d/);
   });
 });

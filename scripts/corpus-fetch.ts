@@ -105,7 +105,7 @@ export const sources = (date: string): Source[] => [
     title: 'Directive (EU) 2015/2366 (PSD2)',
     filename: 'directive-eu-2015-2366-psd2.pdf',
     kind: 'pdf',
-    licence: 'Reuse authorised under Commission Decision 2011/833/EU',
+    licence: "Reuse authorised by the EUR-Lex legal notice (the Commission's reuse policy, Decision 2011/833/EU)",
     licenceUrl: 'https://eur-lex.europa.eu/content/legal-notice/legal-notice.html',
     attribution: '© European Union, https://eur-lex.europa.eu/, 1998–2026. Only the Official Journal of the European Union is authentic.',
     note: "Same Official Journal text as EUR-Lex CELEX:32015L2366 (https://eur-lex.europa.eu/eli/dir/2015/2366/oj). Downloaded from the Publications Office's Cellar because EUR-Lex challenges scripted downloads.",

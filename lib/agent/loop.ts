@@ -57,6 +57,7 @@ export type AgentDeps = {
   embed: Embedder;
   scope: string[];
   sourceUrlOf: (documentId: string) => string | null;
+  signal: AbortSignal;
 };
 
 type Breakpoint = { cache_control?: SearchResultBlockParam['cache_control'] };
@@ -99,6 +100,7 @@ export const runAgent = async (deps: AgentDeps, question: string, emit: (event: 
   const breakpoints: Breakpoint[] = [];
 
   for (let round = 0; ; round++) {
+    if (deps.signal.aborted) return 'abandoned' as const;
     const params: ModelParams = {
       model: deps.modelId,
       max_tokens: MAX_TOKENS,
@@ -117,6 +119,7 @@ export const runAgent = async (deps: AgentDeps, question: string, emit: (event: 
     }
     emit({ type: 'usage', anthropic: message.usage });
     messages.push({ role: 'assistant', content: message.content });
+    if (deps.signal.aborted) return 'abandoned' as const;
 
     if (message.stop_reason === 'refusal') {
       emit({ type: 'citations', status: 'declined', segments: [], results: [], excerpts: [] });
@@ -142,6 +145,7 @@ export const runAgent = async (deps: AgentDeps, question: string, emit: (event: 
     if (round === MAX_ROUNDS) throw new Error('the model asked for another tool after the last round');
 
     const uses = message.content.filter((block): block is ToolUseBlock => block.type === 'tool_use');
+    if (!uses.length) throw new Error('the model stopped for a tool call but sent no tool_use block');
     const texts = reasons(message, uses);
     const runs = await Promise.all(uses.map((use) => runTool({ db: deps.db, embed: deps.embed, scope }, use.name, use.input)));
     const toolResults: ToolResultBlockParam[] = uses.map((use, i) => {

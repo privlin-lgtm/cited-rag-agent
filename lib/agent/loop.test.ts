@@ -1,5 +1,5 @@
 import type { Message, SearchResultBlockParam, StopReason, TextCitation, ToolResultBlockParam } from '@anthropic-ai/sdk/resources/messages';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Embedder } from '../embed';
 import { fakeEmbedder } from '../fake-embedder';
 import { runAgent, type AgentEvent, type ModelCall, type ModelParams } from './loop';
@@ -34,9 +34,9 @@ const scripted = (script: (calls: ModelParams[]) => Message | Error) => {
   return { model, calls };
 };
 
-const run = async (model: ModelCall, { scope = fixture.all, embed = fakeEmbedder as Embedder } = {}) => {
+const run = async (model: ModelCall, { scope = fixture.all, embed = fakeEmbedder as Embedder, signal = new AbortController().signal } = {}) => {
   const events: AgentEvent[] = [];
-  await runAgent({ model, modelId: 'claude-sonnet-5-5', db: fixture.db, embed, scope, sourceUrlOf: () => null }, 'How long to cancel?', (event) => events.push(event));
+  await runAgent({ model, modelId: 'claude-sonnet-5-5', db: fixture.db, embed, scope, sourceUrlOf: () => null, signal }, 'How long to cancel?', (event) => events.push(event));
   return events;
 };
 
@@ -207,6 +207,32 @@ describe('runAgent', () => {
   it('throws when the model still asks for a tool on the call after round 6', async () => {
     const { model } = scripted((so) => reply([toolUse(`t${so.length}`, 'list_documents', {})], 'tool_use'));
     await expect(run(model)).rejects.toThrow('another tool after the last round');
+  });
+
+  it('throws when the model stops for a tool call but sends no tool_use block', async () => {
+    const { model, calls } = scripted(() => reply([text('Let me look that up.')], 'tool_use'));
+    await expect(run(model)).rejects.toThrow('the model stopped for a tool call but sent no tool_use block');
+    expect(calls).toHaveLength(1);
+  });
+
+  it('makes no model call when the signal is aborted before the start', async () => {
+    const { model, calls } = scripted(() => reply([text('Never sent.')], 'end_turn'));
+    const events = await run(model, { signal: AbortSignal.abort() });
+    expect(calls).toHaveLength(0);
+    expect(events).toEqual([]);
+  });
+
+  it('lets a model call in flight when the signal aborts finish and emit its usage, then runs no tools', async () => {
+    const controller = new AbortController();
+    const embed = vi.fn(fakeEmbedder);
+    const { model, calls } = scripted(() => {
+      controller.abort();
+      return reply([toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 2 })], 'tool_use');
+    });
+    const events = await run(model, { embed, signal: controller.signal });
+    expect(calls).toHaveLength(1);
+    expect(events.map(({ type }) => type)).toEqual(['usage']);
+    expect(embed).not.toHaveBeenCalled();
   });
 
   it('throws on a stop reason it cannot handle', async () => {
