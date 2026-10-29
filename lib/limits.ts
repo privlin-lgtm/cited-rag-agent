@@ -25,7 +25,6 @@ export const windowStart = (now: Date, unit: Unit) => {
 };
 
 const windowEnd = (start: Date, unit: Unit) => new Date(start.getTime() + (unit === 'hour' ? HOUR_MS : DAY_MS));
-const resets = (end: Date) => `It resets at ${end.toISOString().slice(0, 16).replace('T', ' ')} UTC.`;
 
 export const clientKey = (headers: Headers, secret: string) =>
   createHmac('sha256', secret)
@@ -54,23 +53,20 @@ const read = async (db: Db, bucket: string, start: Date) =>
 export const reserveQuestion = async (db: Db, key: string, now = new Date()) => {
   const start = windowStart(now, 'hour');
   if ((await add(db, `ask:ip:${key}`, start, 1)) > ASK_PER_HOUR)
-    throw new LimitError(`Question limit reached: ${ASK_PER_HOUR} questions an hour from one address. ${resets(windowEnd(start, 'hour'))}`, windowEnd(start, 'hour'));
+    throw new LimitError(`This demo takes ${ASK_PER_HOUR} questions an hour from each visitor, and you've reached that.`, windowEnd(start, 'hour'));
 };
 
 export const reserveUpload = async (db: Db, key: string, now = new Date()) => {
   const start = windowStart(now, 'day');
   if ((await add(db, `upload:ip:${key}`, start, 1)) > UPLOAD_PER_DAY)
-    throw new LimitError(`Upload limit reached: ${UPLOAD_PER_DAY} uploads a day from one address. ${resets(windowEnd(start, 'day'))}`, windowEnd(start, 'day'));
+    throw new LimitError(`This demo takes ${UPLOAD_PER_DAY} uploads a day from each visitor, and you've reached that.`, windowEnd(start, 'day'));
 };
 
 export const reserveBudget = async (db: Db, budgetUsd: number, now = new Date()) => {
   const start = windowStart(now, 'day');
   if ((await add(db, 'anthropic:usd', start, RESERVE_MICRO_USD)) > budgetUsd * 1e6) {
     await add(db, 'anthropic:usd', start, -RESERVE_MICRO_USD);
-    throw new LimitError(
-      `Daily cost budget reached: the demo's $${budgetUsd.toFixed(2)} for today is spent or held by questions in progress. ${resets(windowEnd(start, 'day'))}`,
-      windowEnd(start, 'day'),
-    );
+    throw new LimitError("The demo's question budget for today is used up, or held by questions other visitors are asking right now.", windowEnd(start, 'day'));
   }
 };
 
@@ -81,13 +77,9 @@ export const releaseBudget = async (db: Db, reservedAt: Date) => {
 export const assertEmbedBudget = async (db: Db, now = new Date(), estimatedTokens = 0) => {
   const start = windowStart(now, 'day');
   const used = await read(db, 'embed:tokens', start);
-  const budget = EMBED_TOKENS_PER_DAY.toLocaleString('en-US');
-  if (used >= EMBED_TOKENS_PER_DAY) throw new LimitError(`Embedding budget reached: ${budget} tokens a day. ${resets(windowEnd(start, 'day'))}`, windowEnd(start, 'day'));
+  if (used >= EMBED_TOKENS_PER_DAY) throw new LimitError("The demo's budget for reading uploads is used up for today.", windowEnd(start, 'day'));
   if (used + estimatedTokens > EMBED_TOKENS_PER_DAY)
-    throw new LimitError(
-      `Embedding budget reached: this upload needs about ${estimatedTokens.toLocaleString('en-US')} tokens and ${used.toLocaleString('en-US')} of the ${budget} a day are used. ${resets(windowEnd(start, 'day'))}`,
-      windowEnd(start, 'day'),
-    );
+    throw new LimitError("This file needs more of today's upload budget than is left. A smaller file may still fit.", windowEnd(start, 'day'));
 };
 
 export const addCost = async (db: Db, usd: number, now = new Date()) => {
