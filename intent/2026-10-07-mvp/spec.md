@@ -5,6 +5,7 @@ Revised 2026-10-08 with the second validate pass polish (`fix/sandbox-polish`): 
 Revised 2026-10-13 with M4 (`m4-evals`): features 3, 6, 8, 11 and 13, Screens / routes and AI features.
 Revised 2026-10-14 with M5 (`m5-environments`): features 11 and 12 and Screens / routes, after Paul's decisions of 13 Oct.
 Revised 2026-10-21 with M6 (`m6-readme`): features 6, 8, 9, 10 and 12, Concerns, Screens / routes and D3.
+Revised 2026-10-29 with the limit messages (`fix/limit-messages`): feature 10.
 
 ## Stack
 - **App:** Next.js 16.4.0 (App Router, Route Handlers on the Node runtime), React 19.3.0, TypeScript `~5.9.3`, Tailwind CSS 4 with a few shadcn/ui components. Every version is pinned exactly except TypeScript (`~5.9.3`, patch updates only), and the lockfile is committed. Lint runs through the ESLint CLI, since `next lint` is gone in 16. Hosted on Vercel (Paul's Pro account), with functions in `fra1`.
@@ -129,7 +130,7 @@ Revised 2026-10-21 with M6 (`m6-readme`): features 6, 8, 9, 10 and 12, Concerns,
       - **Embedding tokens** are debited as each Voyage response arrives, batch by batch, for uploads and questions alike, so tokens spent before a failure still count. An upload's estimate (feature 2) is checked against the day's total before the first batch.
     - **Server log:** when a run ends, `handleAsk` writes one `console.info` line of JSON: `event` ("ask"), `status` (`complete`, `cut_off`, `declined`, `error`, or `abandoned` when the visitor left before the answer), `model`, `rounds` (tool rounds run), `toolCalls`, `keywordFallbacks`, the four token counts, `costUsd` and `latencyMs`. It never holds the question, document ids, the session id or the address hash.
     - **IP:** the first address in `x-forwarded-for`, which Vercel sets. The hash is HMAC-SHA256 keyed with `IP_HASH_SECRET`, first 16 hex characters.
-    - **Messages:** each refusal says which limit was hit and when it resets.
+    - **Messages:** each refusal says which limit was hit, in plain words, and the page adds when it resets in the visitor's local time from `resetsAt`. A model API error shows a plain sentence on the page; its raw text goes to the server log as an `ask_error` line.
 11. **Evals** (M4, b.9).
     - **Questions:** `evals/questions.json` holds 12 to 15 questions (14 at M4), each with the set of (filename, locator) pairs that answer it, written after reading the ingested corpus.
     - **Matching:** a retrieved chunk matches an expected pair when the filename is equal and the locator matches by the document's kind:

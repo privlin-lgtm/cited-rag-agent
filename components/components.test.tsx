@@ -2,8 +2,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import type { CitationCheck, Excerpt } from '../lib/agent/citations';
 import type { StepEvent } from '../lib/agent/loop';
+import type { Notice } from '../lib/notice';
 import { initialRun, type CitationsEvent, type RunState } from '../lib/run-state';
 import { AnswerPanel } from './answer-panel';
+import { DocumentsPanel } from './documents-panel';
 import { ExcerptsPanel } from './excerpts-panel';
 import { Timeline } from './timeline';
 import { Workspace } from './workspace';
@@ -20,7 +22,7 @@ const step = (overrides: Partial<StepEvent> = {}): StepEvent => ({
 });
 
 describe('AnswerPanel status line', () => {
-  const answer = (run: RunState, running: boolean, problem?: string) => renderToStaticMarkup(<AnswerPanel run={run} running={running} problem={problem} />);
+  const answer = (run: RunState, running: boolean, problem?: Notice) => renderToStaticMarkup(<AnswerPanel run={run} running={running} problem={problem} />);
   const afterFirstStep: RunState = { ...initialRun, steps: [step()] };
   const citations: CitationsEvent = { type: 'citations', status: 'complete', segments: [{ text: 'Thirty minutes.', refs: [] }], results: [], excerpts: [] };
 
@@ -34,8 +36,49 @@ describe('AnswerPanel status line', () => {
     expect(answer({ ...afterFirstStep, pending: 'Thirty min' }, true)).toContain('Thirty min');
     expect(answer({ ...afterFirstStep, citations }, true)).not.toContain(STATUS);
     expect(answer({ ...afterFirstStep, error: { type: 'error', message: 'Overloaded', excerpts: [] } }, true)).not.toContain(STATUS);
-    expect(answer(afterFirstStep, true, 'The connection was lost.')).not.toContain(STATUS);
+    expect(answer(afterFirstStep, true, { message: 'The connection was lost.', limit: false })).not.toContain(STATUS);
     expect(answer(afterFirstStep, false)).not.toContain(STATUS);
+  });
+});
+
+describe('AnswerPanel problems and errors', () => {
+  const answer = (run: RunState, problem?: Notice) => renderToStaticMarkup(<AnswerPanel run={run} running={false} problem={problem} />);
+  const sentence = 'You can try again at 15:00.';
+
+  it('shows a limit in the neutral box with its reset sentence, not the red one', () => {
+    const html = answer(initialRun, { message: `This demo takes 15 questions an hour from each visitor, and you've reached that. ${sentence}`, limit: true });
+    expect(html).toContain('You can try again at 15:00.');
+    expect(html).toContain('border-zinc-300');
+    expect(html).not.toMatch(/bg-red-50|text-red-800/);
+  });
+
+  it('keeps any other problem in the red box', () => {
+    const html = answer(initialRun, { message: 'The request failed (HTTP 500).', limit: false });
+    expect(html).toContain('bg-red-50');
+    expect(html).toContain('The request failed (HTTP 500).');
+  });
+
+  it('shows the visitor sentence under "No answer generated." in the red box', () => {
+    const message = 'The demo has reached its spending limit for now. Please try again later.';
+    const html = answer({ ...initialRun, error: { type: 'error', message, excerpts: [] } });
+    expect(html).toContain('No answer generated.');
+    expect(html).toContain(message);
+    expect(html).toContain('bg-red-50');
+    expect(html).not.toContain('{');
+  });
+});
+
+describe('DocumentsPanel upload notice', () => {
+  const panel = (uploadError: Notice) =>
+    renderToStaticMarkup(<DocumentsPanel documents={[]} selected={new Set()} onToggle={() => {}} onToggleAll={() => {}} onUpload={() => {}} onDelete={() => {}} uploading={false} uploadError={uploadError} />);
+
+  it('shows an upload limit in neutral text and any other upload problem in red', () => {
+    const limit = panel({ message: 'This demo takes 10 uploads a day from each visitor, and you\'ve reached that. You can try again tomorrow at 02:00.', limit: true });
+    expect(limit).toContain('text-zinc-600');
+    expect(limit).toContain('You can try again tomorrow at 02:00.');
+    expect(limit).not.toContain('text-red-700');
+    const other = panel({ message: 'The file is larger than 4 MB.', limit: false });
+    expect(other).toContain('text-red-700');
   });
 });
 
