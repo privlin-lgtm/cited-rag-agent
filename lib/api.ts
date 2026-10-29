@@ -50,6 +50,13 @@ const debited =
   (texts, inputType) =>
     embedder(texts, inputType, (tokens) => addEmbedTokens(db, tokens, now()));
 
+const visitorSentence = (raw: string) =>
+  /usage limit/i.test(raw)
+    ? 'The demo has reached its spending limit for now. Please try again later.'
+    : /overloaded/i.test(raw) || /^(429|529)\b/.test(raw)
+      ? 'Claude is busy right now. Please try again in a minute.'
+      : 'Something went wrong while writing the answer. Please try again.';
+
 const ndjson = (events: ReadableStream<Uint8Array>) =>
   new Response(events, { headers: { 'Content-Type': 'application/x-ndjson; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' } });
 
@@ -100,6 +107,10 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
             for (const key of Object.keys(totals) as (keyof typeof totals)[]) totals[key] += counts[key];
             recording = recording.then(() => addCost(deps.db, usd, deps.now()));
           };
+          const fail = (raw: string, excerpts: Extract<AgentEvent, { type: 'error' }>['excerpts']) => {
+            console.error(JSON.stringify({ event: 'ask_error', message: raw }));
+            write({ type: 'error', message: visitorSentence(raw), excerpts });
+          };
           const queryEmbed = debited(deps.queryEmbedder, deps);
           try {
             try {
@@ -119,6 +130,7 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
                 question,
                 (event) => {
                   if (event.type === 'usage') return record(event);
+                  if (event.type === 'error') return fail(event.message, event.excerpts);
                   if (event.type === 'citations') run.status = event.status;
                   if (event.type === 'step') {
                     run.rounds = event.round;
@@ -135,7 +147,7 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
               await recording;
             } catch (error) {
               run.status = 'error';
-              write({ type: 'error', message: error instanceof Error ? error.message : String(error), excerpts: [] });
+              fail(error instanceof Error ? error.message : String(error), []);
               await recording;
             }
           } finally {
