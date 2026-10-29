@@ -1,4 +1,5 @@
 import type { DocumentView } from '../lib/documents';
+import type { Notice } from '../lib/notice';
 import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 
@@ -21,7 +22,7 @@ export const DocumentsPanel = ({
   onUpload: (file: File) => void;
   onDelete: (id: string) => void;
   uploading: boolean;
-  uploadError?: string;
+  uploadError?: Notice;
 }) => {
   const corpus = documents.filter(({ origin }) => origin === 'corpus');
   const uploads = documents.filter(({ origin }) => origin === 'upload');
@@ -86,7 +87,7 @@ export const DocumentsPanel = ({
         </span>
       </label>
       <p className="mt-2 text-xs text-zinc-500">md, pdf or txt, up to 4 MB and 40 pages. Only this browser session can see it, and it is deleted after 24 hours.</p>
-      {uploadError && <p className="mt-2 text-xs text-red-700 dark:text-red-400">{uploadError}</p>}
+      {uploadError && <p className={`mt-2 text-xs ${uploadError.limit ? 'text-zinc-600 dark:text-zinc-400' : 'text-red-700 dark:text-red-400'}`}>{uploadError.message}</p>}
     </section>
   );
 };

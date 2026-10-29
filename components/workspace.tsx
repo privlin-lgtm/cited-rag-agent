@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import type { DocumentView } from '../lib/documents';
+import { resetSentence, type Notice } from '../lib/notice';
 import { initialRun, reduce, type DoneEvent, type RunState, type WireEvent } from '../lib/run-state';
 import { AnswerPanel } from './answer-panel';
 import { DocumentsPanel } from './documents-panel';
@@ -14,7 +15,12 @@ const MAX_QUESTION = 500;
 const REPO = 'https://github.com/privlin-lgtm/cited-rag-agent';
 const CHAIN = `${REPO}/blob/HEAD/intent/2026-10-07-mvp`;
 
-const apiError = async (response: Response) => ((await response.json().catch(() => null)) as { error?: string } | null)?.error ?? `The request failed (HTTP ${response.status}).`;
+const apiError = async (response: Response): Promise<Notice> => {
+  const body = (await response.json().catch(() => null)) as { error?: string; resetsAt?: string } | null;
+  const message = body?.error ?? `The request failed (HTTP ${response.status}).`;
+  const resetsAt = body?.resetsAt ? new Date(body.resetsAt) : undefined;
+  return { message: resetsAt && !Number.isNaN(resetsAt.getTime()) ? `${message} ${resetSentence(resetsAt, new Date())}` : message, limit: response.status === 429 };
+};
 
 export function Workspace({ env, examples, initialDocuments }: { env: string; examples: string[]; initialDocuments: DocumentView[] }) {
   const [documents, setDocuments] = useState<DocumentView[]>(initialDocuments);
@@ -22,10 +28,10 @@ export function Workspace({ env, examples, initialDocuments }: { env: string; ex
   const [question, setQuestion] = useState('');
   const [run, setRun] = useState<RunState>(initialRun);
   const [running, setRunning] = useState(false);
-  const [problem, setProblem] = useState<string>();
+  const [problem, setProblem] = useState<Notice>();
   const [lastDone, setLastDone] = useState<DoneEvent>();
   const [uploading, setUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string>();
+  const [uploadError, setUploadError] = useState<Notice>();
 
   const load = async () => {
     const response = await fetch('/api/documents');
@@ -65,7 +71,7 @@ export function Workspace({ env, examples, initialDocuments }: { env: string; ex
           }
       }
     } catch (error) {
-      setProblem(error instanceof Error ? error.message : 'The connection was lost.');
+      setProblem({ message: error instanceof Error ? error.message : 'The connection was lost.', limit: false });
     } finally {
       setRunning(false);
     }
@@ -81,7 +87,7 @@ export function Workspace({ env, examples, initialDocuments }: { env: string; ex
       if (!response.ok) return setUploadError(await apiError(response));
       await load();
     } catch (error) {
-      setUploadError(error instanceof Error ? error.message : 'The upload failed.');
+      setUploadError({ message: error instanceof Error ? error.message : 'The upload failed.', limit: false });
     } finally {
       setUploading(false);
     }
