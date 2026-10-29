@@ -62,8 +62,7 @@ describe('reserveQuestion', () => {
   it('allows 15 questions an hour and refuses the 16th with its reset time', async () => {
     for (let i = 0; i < 15; i++) await reserveQuestion(db, 'abc', now);
     const error = await limited(() => reserveQuestion(db, 'abc', now));
-    expect(error.message).toContain('15 questions an hour');
-    expect(error.message).toContain('2026-10-07 15:00 UTC');
+    expect(error.message).toBe("This demo takes 15 questions an hour from each visitor, and you've reached that.");
     expect(error.resetsAt.toISOString()).toBe('2026-10-07T15:00:00.000Z');
   });
 
@@ -78,7 +77,7 @@ describe('reserveUpload', () => {
   it('allows 10 uploads a day and refuses the 11th until midnight UTC', async () => {
     for (let i = 0; i < 10; i++) await reserveUpload(db, 'abc', now);
     const error = await limited(() => reserveUpload(db, 'abc', now));
-    expect(error.message).toContain('10 uploads a day');
+    expect(error.message).toBe("This demo takes 10 uploads a day from each visitor, and you've reached that.");
     expect(error.resetsAt.toISOString()).toBe('2026-10-08T00:00:00.000Z');
   });
 });
@@ -94,7 +93,7 @@ describe('reserveBudget and releaseBudget', () => {
     expect(await windowTotal('anthropic:usd')).toBe(750_000 + 2 * RESERVE_MICRO_USD);
     const error = await limited(() => reserveBudget(db, 1, now));
     expect(await windowTotal('anthropic:usd')).toBe(750_000 + 2 * RESERVE_MICRO_USD);
-    expect(error.message).toContain('$1.00');
+    expect(error.message).toBe("The demo's question budget for today is used up, or held by questions other visitors are asking right now.");
     expect(error.resetsAt.toISOString()).toBe('2026-10-08T00:00:00.000Z');
     await reserveBudget(db, 1, new Date('2026-10-08T00:00:01Z'));
   });
@@ -136,16 +135,14 @@ describe('assertEmbedBudget', () => {
     await assertEmbedBudget(db, now);
     await addEmbedTokens(db, 1, now);
     const error = await limited(() => assertEmbedBudget(db, now));
-    expect(error.message).toContain('2,000,000 tokens a day');
+    expect(error.message).toBe("The demo's budget for reading uploads is used up for today.");
   });
 
   it('refuses an estimate that would pass 2M, with the reset time, and allows one that lands exactly on it', async () => {
     await addEmbedTokens(db, EMBED_TOKENS_PER_DAY - 1000, now);
     await assertEmbedBudget(db, now, 1000);
     const error = await limited(() => assertEmbedBudget(db, now, 1001));
-    expect(error.message).toContain('this upload needs about 1,001 tokens');
-    expect(error.message).toContain('1,999,000 of the 2,000,000 a day are used');
-    expect(error.message).toContain('2026-10-08 00:00 UTC');
+    expect(error.message).toBe("This file needs more of today's upload budget than is left. A smaller file may still fit.");
     expect(error.resetsAt.toISOString()).toBe('2026-10-08T00:00:00.000Z');
   });
 });
