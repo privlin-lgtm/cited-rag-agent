@@ -1,13 +1,24 @@
+import type { Notice } from '../lib/notice';
 import { header, checkedCount, markers, type RunState } from '../lib/run-state';
 import { Badge } from './ui/badge';
 import { Prose } from './prose';
 
-export const AnswerPanel = ({ run, running, problem }: { run: RunState; running: boolean; problem?: string }) => {
+export const AnswerPanel = ({ run, running, problem }: { run: RunState; running: boolean; problem?: Notice }) => {
   const { citations, error, pending } = run;
   return (
     <section aria-label="Answer" aria-live="polite">
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide text-zinc-500">Answer</h2>
-      {problem && <p className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200">{problem}</p>}
+      {problem && (
+        <p
+          className={
+            problem.limit
+              ? 'rounded-lg border border-zinc-300 p-3 text-sm dark:border-zinc-700'
+              : 'rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:border-red-800 dark:bg-red-950 dark:text-red-200'
+          }
+        >
+          {problem.message}
+        </p>
+      )}
       {citations?.status === 'declined' && <p className="rounded-lg border border-zinc-300 p-3 text-sm dark:border-zinc-700">Claude declined to answer this question.</p>}
       {citations && citations.status !== 'declined' && (
         <div>

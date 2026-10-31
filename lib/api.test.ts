@@ -16,6 +16,7 @@ let modelCalls: ModelParams[];
 let script: (calls: ModelParams[]) => Message | Error;
 let gate: Promise<void>;
 let info: MockInstance<Console['info']>;
+let errorLog: MockInstance<Console['error']>;
 
 const usage = { input_tokens: 100, output_tokens: 20, cache_creation_input_tokens: null, cache_read_input_tokens: null };
 const reply = (content: unknown[], stopReason: StopReason) =>
@@ -44,7 +45,7 @@ const model: ModelCall = async (params, onText) => {
 const deps = (overrides: Partial<ApiDeps> = {}, session: string | null = 'sess1'): ApiDeps => ({
   db: fixture.db,
   now: () => NOW,
-  sessionId: async ({ create }) => session ?? (create ? 'sess1' : undefined),
+  sessionId: (async ({ create }: { create: boolean }) => session ?? (create ? 'sess1' : undefined)) as ApiDeps['sessionId'],
   ipSecret: 'ip-secret',
   cronSecret: 'cron-secret',
   budgetUsd: 1,
@@ -83,6 +84,7 @@ beforeEach(async () => {
   modelCalls = [];
   gate = Promise.resolve();
   info = vi.spyOn(console, 'info').mockImplementation(() => {});
+  errorLog = vi.spyOn(console, 'error').mockImplementation(() => {});
   script = () => reply([text('Nothing to cite.')], 'end_turn');
 });
 
@@ -127,8 +129,35 @@ describe('POST /api/ask', () => {
     script = (calls) => (calls.length === 1 ? reply([toolUse('t1', 'list_documents', {})], 'tool_use') : new Error('Overloaded'));
     const lines = await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));
     expect(lines.map(({ type }) => type)).toEqual(['step', 'error', 'done']);
-    expect(lines[1]).toMatchObject({ message: 'Overloaded' });
+    expect(lines[1]).toMatchObject({ message: 'Claude is busy right now. Please try again in a minute.' });
+    expect(errorLog).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(errorLog.mock.calls[0][0]))).toEqual({ event: 'ask_error', message: 'Overloaded' });
     expect(await spent('anthropic:usd')).toBe(400);
+  });
+
+  it('shows a plain spending sentence, not the SDK JSON, when the workspace usage limit is reached, and logs the raw text', async () => {
+    const raw =
+      '400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified workspace API usage limits. You will regain access on 2026-11-01 at 00:00 UTC."},"request_id":"req_011CZ"}';
+    script = () => new Error(raw);
+    const lines = await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));
+    expect(lines.map(({ type }) => type)).toEqual(['error', 'done']);
+    expect(lines[0]).toMatchObject({ message: 'The demo has reached its spending limit for now. Please try again later.' });
+    expect((lines[0] as unknown as { message: string }).message).not.toContain('{');
+    expect(errorLog).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(errorLog.mock.calls[0][0]))).toEqual({ event: 'ask_error', message: raw });
+    expect(JSON.parse(String(info.mock.calls[0][0]))).toMatchObject({ event: 'ask', status: 'error' });
+    expect(await spent('anthropic:usd')).toBe(0);
+  });
+
+  it.each([
+    ['529 {"type":"error","error":{"type":"overloaded_error"}}', 'Claude is busy right now. Please try again in a minute.'],
+    ['429 {"type":"error","error":{"type":"rate_limit_error"}}', 'Claude is busy right now. Please try again in a minute.'],
+    ['fetch failed', 'Something went wrong while writing the answer. Please try again.'],
+  ])('sends a visitor sentence for the model error %s', async (raw, sentence) => {
+    script = () => new Error(raw);
+    const lines = await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));
+    expect(lines[0]).toMatchObject({ type: 'error', message: sentence });
+    expect(errorLog).toHaveBeenCalledOnce();
   });
 
   it('refuses the 16th question in an hour with a 429 and its reset time, before any model call', async () => {
@@ -137,7 +166,7 @@ describe('POST /api/ask', () => {
     const response = await handleAsk(askRequest({ question: 'One more?' }), deps());
     expect(response.status).toBe(429);
     expect(response.headers.get('retry-after')).toBe('1800');
-    expect(await response.json()).toMatchObject({ error: expect.stringContaining('15 questions an hour'), resetsAt: '2026-10-07T15:00:00.000Z' });
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining('15 questions an hour from each visitor'), resetsAt: '2026-10-07T15:00:00.000Z' });
     expect(modelCalls).toHaveLength(0);
   });
 
@@ -145,7 +174,7 @@ describe('POST /api/ask', () => {
     await addCost(fixture.db, 1, NOW);
     const response = await handleAsk(askRequest({ question: 'Anything?' }), deps());
     expect(response.status).toBe(429);
-    expect(await response.json()).toMatchObject({ error: expect.stringContaining('Daily cost budget reached'), resetsAt: '2026-10-08T00:00:00.000Z' });
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining('question budget for today is used up'), resetsAt: '2026-10-08T00:00:00.000Z' });
     expect(modelCalls).toHaveLength(0);
     expect(await spent('anthropic:usd')).toBe(1_000_000);
   });
@@ -154,7 +183,7 @@ describe('POST /api/ask', () => {
     await addCost(fixture.db, 0.95, NOW);
     const response = await handleAsk(askRequest({ question: 'Anything?' }), deps());
     expect(response.status).toBe(429);
-    expect(await response.json()).toMatchObject({ error: expect.stringContaining('Daily cost budget reached'), resetsAt: '2026-10-08T00:00:00.000Z' });
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining('question budget for today is used up'), resetsAt: '2026-10-08T00:00:00.000Z' });
     expect(modelCalls).toHaveLength(0);
     expect(await spent('anthropic:usd')).toBe(950_000);
   });
@@ -193,6 +222,37 @@ describe('POST /api/ask', () => {
     open();
     await vi.waitFor(async () => expect(await spent('anthropic:usd')).toBe(400));
     expect(modelCalls).toHaveLength(1);
+  });
+
+  it('makes no second model call when the visitor leaves during the first tool round, keeps that call\'s cost and logs abandoned', async () => {
+    const leaving: Embedder = async (texts, inputType, onBatch) => {
+      await reader.cancel();
+      return fakeEmbedder(texts, inputType, onBatch);
+    };
+    script = (calls) =>
+      calls.length === 1
+        ? reply([text('Looking.'), toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 3 })], 'tool_use')
+        : reply([text('Cancel within 30 minutes.', [cite(0, 0)])], 'end_turn');
+    let open!: () => void;
+    gate = new Promise((resolve) => (open = resolve));
+    const response = await handleAsk(askRequest({ question: 'How long to cancel?' }), deps({ queryEmbedder: leaving }));
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+    open();
+    await vi.waitFor(() => expect(info).toHaveBeenCalledOnce());
+    expect(modelCalls).toHaveLength(1);
+    await vi.waitFor(async () => expect(await spent('anthropic:usd')).toBe(400));
+    expect(JSON.parse(String(info.mock.calls[0][0]))).toMatchObject({ event: 'ask', status: 'abandoned', rounds: 1, toolCalls: 1 });
+  });
+
+  it('ends a tool_use stop with no tool block in an explicit error, logs error and releases the hold', async () => {
+    script = () => reply([text('Let me look that up.')], 'tool_use');
+    const lines = await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));
+    expect(lines.map(({ type }) => type)).toEqual(['answer', 'error', 'done']);
+    expect(lines[1]).toMatchObject({ message: 'Something went wrong while writing the answer. Please try again.' });
+    expect(errorLog).toHaveBeenCalledOnce();
+    expect(JSON.parse(String(errorLog.mock.calls[0][0]))).toEqual({ event: 'ask_error', message: 'the model stopped for a tool call but sent no tool_use block' });
+    expect(JSON.parse(String(info.mock.calls[0][0]))).toMatchObject({ event: 'ask', status: 'error' });
+    expect(await spent('anthropic:usd')).toBe(400);
   });
 
   it("answers 400 for a document id outside the session, another session's upload included, and reserves no budget", async () => {
@@ -240,8 +300,8 @@ describe('POST /api/ask', () => {
     script = (calls) =>
       calls.length === 1 ? reply([toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer' })], 'tool_use') : reply([text('Done.')], 'end_turn');
     const lines = await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));
-    expect(lines.find(({ type }) => type === 'step')).toMatchObject({ fallback: 'keyword', fallbackReason: expect.stringContaining('Embedding budget reached') });
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('search_documents fell back to keyword search: Embedding budget reached'));
+    expect(lines.find(({ type }) => type === 'step')).toMatchObject({ fallback: 'keyword', fallbackReason: expect.stringContaining('budget for reading uploads is used up') });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('search_documents fell back to keyword search: The demo\'s budget for reading uploads is used up'));
   });
 });
 
@@ -278,7 +338,7 @@ describe('POST /api/upload', () => {
     const embedder = vi.fn(fakeEmbedder);
     const response = await handleUpload(uploadRequest('notes.md', `# A\n${'Refunds arrive within twelve days of the request. '.repeat(4)}`), deps({ documentEmbedder: embedder }));
     expect(response.status).toBe(429);
-    expect(await response.json()).toMatchObject({ error: expect.stringContaining('this upload needs about'), resetsAt: '2026-10-08T00:00:00.000Z' });
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining('This file needs more of today'), resetsAt: '2026-10-08T00:00:00.000Z' });
     expect(embedder).not.toHaveBeenCalled();
     expect(await spent('embed:tokens')).toBe(EMBED_TOKENS_PER_DAY - 20);
   });
@@ -297,14 +357,14 @@ describe('POST /api/upload', () => {
     for (let i = 0; i < 10; i++) await reserveUpload(fixture.db, key, NOW);
     const response = await handleUpload(uploadRequest('notes.md', '# A\nText.'), deps());
     expect(response.status).toBe(429);
-    expect(await response.json()).toMatchObject({ error: expect.stringContaining('10 uploads a day'), resetsAt: '2026-10-08T00:00:00.000Z' });
+    expect(await response.json()).toMatchObject({ error: expect.stringContaining('10 uploads a day from each visitor'), resetsAt: '2026-10-08T00:00:00.000Z' });
   });
 
   it('refuses uploads, with the reset time, once the embedding budget is spent', async () => {
     await addEmbedTokens(fixture.db, EMBED_TOKENS_PER_DAY, NOW);
     const response = await handleUpload(uploadRequest('notes.md', '# A\nText.'), deps());
     expect(response.status).toBe(429);
-    expect((await response.json()).error).toContain('Embedding budget reached');
+    expect((await response.json()).error).toContain('budget for reading uploads is used up');
   });
 
   it('rejects a missing file, a wrong type, an empty file, a file over 4 MB, a scanned PDF and a PDF over 40 pages', async () => {

@@ -2,9 +2,29 @@
 
 An agent that answers questions about a pack of cross-border payments documents and shows how it got there. Claude searches the documents with tools and cites passages, and every citation is checked against the stored text before it is marked checked.
 
-**Live on Sandbox:** https://cited-rag-agent-git-sandbox-privlin.vercel.app
+**Live:** https://cited-rag-agent.vercel.app · **Preview (Sandbox):** https://cited-rag-agent-git-sandbox-privlin.vercel.app
 
 ![The cancellation question answered with checked citations: the steps the agent took, the answer, and the cited excerpts with the cited sentences highlighted](docs/screenshot.png)
+
+On a phone:
+
+<img src="docs/screenshot-390.png" width="300" alt="The cancellation question answered on a 390 px phone screen, with the checked-citations header and the answer">
+
+## Architecture
+
+```mermaid
+flowchart LR
+  browser["Browser"] -- "POST /api/ask" --> route["Route handler: cross-site guard, rate limit, budget hold"]
+  route --> loop["Agent loop: Claude Sonnet 5.5, up to 6 tool rounds"]
+  loop -- "tool calls" --> tools["search_documents, keyword_search, read_neighbours, list_documents"]
+  tools -- "query embedding" --> voyage["Voyage voyage-4"]
+  tools --> db[("Postgres 18 + pgvector on Neon")]
+  loop -- "final answer" --> check["Citation check, block by block"]
+  check -- "stored chunks" --> db
+  route -- "NDJSON: steps, answer, citations, done" --> browser
+```
+
+One Next.js app on Vercel serves the page and the API. The question route takes its limits before any model call, runs the loop, checks every citation against the chunks stored in Postgres and streams each step to the page as it happens. Ingest (`npm run ingest:corpus`, and each upload) extracts, chunks and embeds documents into the same database.
 
 ## How a citation is checked
 
@@ -20,6 +40,16 @@ An agent that answers questions about a pack of cross-border payments documents 
 Claude Sonnet 5.5 runs a tool loop of at most six rounds with four tools: `search_documents` (semantic), `keyword_search` (exact terms), `read_neighbours` and `list_documents`. Search results come back as `search_result` blocks, and the loop keeps one global block index across rounds. Each step streams to the page as newline-delimited JSON. When the model stops, the check runs. If embedding the query fails, the search falls back to keywords and the step says so.
 
 Document text is data, not instructions. A hostile document can steer the prose of an answer but cannot forge a checked citation, because the check runs in code on the stored text.
+
+## Decisions
+
+- **A hand-written agent loop, not a framework.** The loop is about 170 lines in [lib/agent/loop.ts](lib/agent/loop.ts). It is the part worth reading, and a framework would hide the round cap, the final call that sends `tool_choice: none`, and the citation index that runs across rounds.
+- **Native search-result citations, not markers parsed from the text.** Claude cites a `search_result` block by index and a range of its sentence blocks, so code can check each citation against the stored chunk. A prompted `[source: file p. N]` marker can be invented; an index into what was sent can be checked.
+- **A cost budget, not a question cap.** Each question holds $0.10 of the day's budget before its first model call and settles to its real cost, from each response's `usage`, when it ends. With $0.85 of a $1.00 budget spent, exactly one of ten simultaneous questions starts (there is a test). A $0.25 hold would stop a burst from ever passing the budget, but it would also refuse the last $0.25 of every day; at $0.10, runs that start together can pass it by at most (budget ÷ $0.10) × (a run's cost − $0.10).
+- **Degrade, don't fail.** If Voyage fails or the day's 2M embedding tokens are spent, semantic search falls back to Postgres full text and the step says so. If the visitor leaves, the run stops before its next model call; the call already running finishes, so its cost is still counted.
+- **One database for vectors and rows.** pgvector keeps the embeddings beside the documents, chunks and limit windows: one fewer service, and every retrieval query is plain SQL.
+- **Tests on PGlite, checked on Neon.** Unit tests run on PGlite through the same `Db` interface. postgres.js encodes a JSON string parameter twice and PGlite doesn't, so every JSON parameter goes through `$n::text::jsonb`, and `npm run smoke:sql` runs every statement on a real Neon database and rolls it back.
+- **Production is built by Vercel, after approval.** Vercel's secret values are write-only, so a build in GitHub couldn't use them. The Release workflow waits for approval, migrates and ingests, then has Vercel build and deploy the commit and checks `/api/health`.
 
 ## Stack
 
@@ -55,7 +85,7 @@ npm run smoke:sql      # every SQL statement through postgres.js, rolled back
 
 ## Corpus
 
-Nine documents, committed under `corpus/files/` with their sources, licences and hashes in [corpus/manifest.json](corpus/manifest.json): three US federal texts on remittance transfers (public domain), the PSD2 directive (EU reuse, source acknowledged), and five Mojaloop documentation pages (Apache-2.0, except the generic transaction patterns page, which states CC BY-ND 4.0).
+Nine documents, committed under `corpus/files/` with their sources, licences and hashes in [corpus/manifest.json](corpus/manifest.json): three US federal texts on remittance transfers (public domain), the PSD2 directive (EU reuse, source acknowledged), and five Mojaloop documentation pages (Apache-2.0, except the generic transaction patterns page, which states CC BY-ND 4.0). The PSD2 text is reused under EUR-Lex's legal notice, which applies the Commission's reuse policy (Decision 2011/833/EU), with the acknowledgement: "© European Union, https://eur-lex.europa.eu/, 1998–2026. Only the Official Journal of the European Union is authentic."
 
 ## The chain
 
@@ -75,9 +105,13 @@ First honest run, on the Sandbox corpus, 13 Oct 2026:
 
 The check fails when hit@5 falls below 12 of 14 ([evals/threshold.json](evals/threshold.json), one question under the first run). [The evals workflow](.github/workflows/evals.yml) ingests the corpus into a fresh pgvector service, so it tests ingest as well as search, and runs on pull requests that touch ingest, search, the agent, the corpus or the eval set. One run spends about 178,000 Voyage tokens (178,185 to ingest the corpus and 267 for the questions), which is free inside Voyage's 200M free tokens, and makes no Anthropic calls.
 
+## Demo
+
+A five-minute walk-through, with the questions to ask and what to point at: [docs/demo.md](docs/demo.md).
+
 ## Status
 
-Sandbox, QA and production, with retrieval evals in CI and a release pipeline gated on approval; production goes live with the first promotion. Next: the README, demo and Lighthouse pass (M6).
+Sandbox, QA and production are live, with retrieval evals in CI and a release pipeline gated on approval. Production went live on 21 October 2026, promoted through QA by PR #28 and PR #29. Every change reaches production through `sandbox` and `qa`.
 
 ## Local secrets
 

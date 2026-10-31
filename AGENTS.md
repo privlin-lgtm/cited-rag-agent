@@ -47,6 +47,7 @@ Never read `.env`, `.env.local` or `.env.*.local`. `.env.local` holds Sandbox cr
 ## Limits and writes
 - The write routes (`POST /api/ask`, `POST /api/upload`, `DELETE /api/documents/:id`) answer 403 to a request with `Sec-Fetch-Site` cross-site or same-site, or with an `Origin` whose host is not the request's host. curl and tests send neither header and pass. When you call a route by hand, send no `Origin`, or the preview's own.
 - A question holds $0.10 of the daily budget while it runs (`reserveBudget`, `releaseBudget` in `lib/limits.ts`). Keep every exit of the run in `handleAsk` inside its `finally`, so the hold is always released.
+- When the answer stream is cancelled (the visitor left), `runAgent` stops before its next model call or tool round. A call already in flight finishes, so its cost is recorded; never abort it. The log line's status is then `abandoned`.
 - `embed:tokens` is debited by the `onBatch` callback that `debited()` passes to the embedder, one Voyage response at a time. Do not debit again from a report's `tokens`.
 - `handleAsk` writes one `console.info` JSON line per run. Never put the question, document ids, the session id or the address hash in it.
 - `.github/workflows/cleanup.yml` (Preview cleanup) calls the Sandbox and QA cleanup routes; it is scheduled hourly, and GitHub runs it every few hours. On production, Vercel's hourly cron job calls the route.
