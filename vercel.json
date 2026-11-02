@@ -1,5 +1,6 @@
 {
   "regions": ["fra1"],
   "git": { "deploymentEnabled": { "master": false } },
+  "functions": { "app/api/ask/route.ts": { "supportsCancellation": true } },
   "crons": [{ "path": "/api/cron/cleanup", "schedule": "0 * * * *" }]
 }
