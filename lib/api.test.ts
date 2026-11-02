@@ -244,6 +244,24 @@ describe('POST /api/ask', () => {
     expect(JSON.parse(String(info.mock.calls[0][0]))).toMatchObject({ event: 'ask', status: 'abandoned', rounds: 1, toolCalls: 1 });
   });
 
+  it('makes no second model call when only the request signal aborts during the first tool round, keeps that call\'s cost, logs abandoned and releases the hold', async () => {
+    const visitor = new AbortController();
+    const leaving: Embedder = async (texts, inputType, onBatch) => {
+      visitor.abort();
+      return fakeEmbedder(texts, inputType, onBatch);
+    };
+    script = (calls) =>
+      calls.length === 1
+        ? reply([text('Looking.'), toolUse('t1', 'search_documents', { query: 'cancel a remittance transfer', k: 3 })], 'tool_use')
+        : reply([text('Cancel within 30 minutes.', [cite(0, 0)])], 'end_turn');
+    const request = new Request(askRequest({ question: 'How long to cancel?' }), { signal: visitor.signal });
+    await handleAsk(request, deps({ queryEmbedder: leaving }));
+    await vi.waitFor(() => expect(info).toHaveBeenCalledOnce());
+    expect(modelCalls).toHaveLength(1);
+    await vi.waitFor(async () => expect(await spent('anthropic:usd')).toBe(400));
+    expect(JSON.parse(String(info.mock.calls[0][0]))).toMatchObject({ event: 'ask', status: 'abandoned', rounds: 1, toolCalls: 1 });
+  });
+
   it('ends a tool_use stop with no tool block in an explicit error, logs error and releases the hold', async () => {
     script = () => reply([text('Let me look that up.')], 'tool_use');
     const lines = await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps()));

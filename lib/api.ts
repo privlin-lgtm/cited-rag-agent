@@ -79,16 +79,24 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
     const encoder = new TextEncoder();
     let closed = false;
     const abort = new AbortController();
+    const leave = () => {
+      closed = true;
+      abort.abort();
+    };
+    request.signal.addEventListener('abort', leave, { once: true });
+    if (request.signal.aborted) leave();
 
     return ndjson(
       new ReadableStream<Uint8Array>({
-        cancel() {
-          closed = true;
-          abort.abort();
-        },
+        cancel: leave,
         async start(controller) {
           const write = (event: object) => {
-            if (!closed) controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+            if (closed) return;
+            try {
+              controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
+            } catch {
+              leave();
+            }
           };
           const totals = { inputTokens: 0, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 };
           let cost = 0;
@@ -151,6 +159,7 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
               await recording;
             }
           } finally {
+            request.signal.removeEventListener('abort', leave);
             console.info(JSON.stringify({ event: 'ask', ...run, ...result() }));
             await releaseBudget(deps.db, reservedAt);
           }
