@@ -19,7 +19,7 @@ The numbers below were measured on 21 October 2026. The cancellation question co
 
 4. **2:30–3:00. No answer in the documents.** Type "What is the capital of France?" and click Ask.
    - Point at the neutral "no citations" badge, and at the Excerpts column, which says that the answer cites no passage.
-   - Say: "When the documents don't cover a question, the agent says so instead of inventing an answer."
+   - Say: "When the documents don't cover a question, the agent says so and cites nothing. If it adds anything from general knowledge, it labels it as such, and nothing uncited is ever marked checked."
 
 5. **3:00–3:45. Your own document.** Under "Your uploads", click "Upload a file" and pick `acme-pay-terms.pdf`.
    - Ask "How many days does an Acme Pay customer have to request a refund?". The answer is 12 days, cited from the upload.
