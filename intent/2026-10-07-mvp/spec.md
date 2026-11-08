@@ -90,7 +90,7 @@ Revised 2026-11-02 after the final walk on production: feature 10's server log (
      - Refined queries should use the documents' own terms.
      - When the documents don't contain the answer, the agent says so plainly.
    - **Voyage failure** (b.15): if embedding the query fails, `search_documents` runs keyword search for that call. The step event carries `fallback: "keyword"`, and the timeline labels it "keyword fallback (embeddings unavailable)".
-   - **The visitor leaves** (validate E2): when the answer stream is cancelled, the run stops before its next model call and before running any more tools. A model call already in flight finishes, so its cost is recorded from its `usage`; the run then ends without an answer, and the $0.10 hold is released as on every other path. Aborting the call in flight would lose its `usage`, and with it the true-up.
+   - **The visitor leaves** (validate E2): when the answer stream is cancelled, the run stops before its next model call and before running any more tools. A model call already in flight finishes, so its cost is recorded from its `usage`; the run then ends without an answer, and the $0.10 hold is released as on every other path. Aborting the call in flight would lose its `usage`, and with it the true-up. On Vercel the run is never told that the visitor left (see feature 10's server log), so it finishes instead, at the cost of at most one extra model call.
 7. **Visible steps.** The answer route streams newline-delimited JSON events:
    - `step`: `{ round, reason, tool, input, hits: [{ file, locator, score }], fallback? }`. The `reason` is the progress text Claude returned before the tool call, when there is any.
    - `answer`: text deltas.
