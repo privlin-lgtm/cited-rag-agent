@@ -1,7 +1,7 @@
 @AGENTS.md
 
 [CRITICAL DESIGN & LANGUAGE CONSTRAINTS]
-Target Model: Fable 5.2
+Target Model: Opus 5.5
 
 1. Output Format: Start directly with the code block. Omit all introductory text, markdown explanations, and post-code summaries. The only text after the code is a two-line footer: files touched, and the test/build result.
 2. Zero Commentary: Remove all inline comments, JSDoc, XML documentation, and headers unless a line uses an entirely opaque hack.
