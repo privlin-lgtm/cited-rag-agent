@@ -58,7 +58,7 @@ From nothing to the spec's four tables:
 
   A session can't change its own model, so this runs two ways:
   - The main session stays on `sonnet`, and each prompt's first line says when Paul should switch with `/model fable` for a review step.
-  - The `verifier` and `architect` subagents carry `model: fable` in their frontmatter, so they run on Fable whenever the Sonnet session calls them. `AGENTS.md` tells the session to call `verifier` before every PR, and `architect` after the same test fails twice.
+  - The `verifier` and `architect` subagents carried `model: fable` in their frontmatter, so they ran on Fable whenever the Sonnet session called them. Since 10 Nov 2026 they carry `model: inherit` and run on the session's model. `AGENTS.md` tells the session to call `verifier` before every PR, and `architect` after the same test fails twice.
 
   Fable has its own weekly allowance on Paul's Max plan (separate from the main limit; usage credits off), so splitting the work spreads it across two limits. The constraint block's "Target Model" line names the coding model (Opus 5.5 since 10 Nov 2026), and its rules apply to every model.
 - **First-pass PR review:** brought forward from M6 by Paul's decision on 9 Oct. PR #15 (`fix/pr-reviewer`) adds a reviewer on Opus 5.5 that applies REVIEW.md to every non-draft pull request from this repository. The Fable verifier still runs before each PR. Whether the reviewer gets its secret, and its spend, is Paul's decision, made with his other agent settings.
