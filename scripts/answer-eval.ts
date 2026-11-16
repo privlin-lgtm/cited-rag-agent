@@ -104,6 +104,8 @@ export const runArm = async (
     const outcome = context ? await askCag(deps, context, question.question) : await askRag(deps, scope, question.question);
     rows.push(scoreOutcome(deps.modelId, arm, question, outcome));
     onRow(rows);
+    if (arm === 'cag' && rows.filter(({ cold }) => cold).length > 1)
+      throw new Error(`Stopped after ${question.id}: a second CAG question wrote the cache again, so the cache is not being reused. Rows so far are saved.`);
   }
   return rows;
 };

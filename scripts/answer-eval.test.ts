@@ -171,6 +171,15 @@ describe('the CAG arm', () => {
     expect(rows[1].costUsd).toBeGreaterThan(0.25);
   });
 
+  it('stops the CAG arm when a second question writes the cache again, after saving its row', async () => {
+    const model: ModelCall = async () => reply([text('No.')], 'end_turn', usage(100_000, 0));
+    const saved: number[] = [];
+    await expect(
+      runArm({ db: fixture.db, model, modelId: 'claude-sonnet-5-5', embed: fakeEmbedder }, 'cag', ['a', 'b', 'c'].map((id) => question(id, ['cancel.md', '§ Cancellation'])), documents, (rows) => saved.push(rows.length)),
+    ).rejects.toThrow(/Stopped after b: a second CAG question wrote the cache again/);
+    expect(saved).toEqual([1, 2]);
+  });
+
   it('stops on a stale database before calling the model', async () => {
     const model = vi.fn<ModelCall>();
     await expect(runArm({ db: fixture.db, model, modelId: 'claude-sonnet-5-5', embed: fakeEmbedder }, 'cag', [question('a', ['cancel.md', '§ Cancellation'])], [{ filename: 'ghost.md', sha256: 'a'.repeat(64) }])).rejects.toThrow(/ghost\.md/);
