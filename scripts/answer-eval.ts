@@ -58,7 +58,7 @@ export type AnswerRow = {
 const passingPairs = (results: CitationCheck[], excerpts: Excerpt[]) =>
   results.flatMap((result) => (result.ok ? excerpts.filter(({ n }) => n === result.excerpt).map(({ file, locator }) => ({ filename: file, locator })) : []));
 
-export const scoreOutcome = (modelId: PricedModel, { id, question, expected }: Question, outcome: Outcome): AnswerRow => {
+export const scoreOutcome = (modelId: PricedModel, arm: Arm, { id, question, expected }: Question, outcome: Outcome): AnswerRow => {
   const counts = outcome.usages.reduce(
     (sum, usage) => ({
       inputTokens: sum.inputTokens + usage.input_tokens,
@@ -79,10 +79,10 @@ export const scoreOutcome = (modelId: PricedModel, { id, question, expected }: Q
     citations: outcome.results.length,
     passed: outcome.results.filter(({ ok }) => ok).length,
     rightSource: passingPairs(outcome.results, outcome.excerpts).some(isExpected),
-    cited: outcome.excerpts.map(({ file, locator }) => ({ file, locator, expected: isExpected({ filename: file, locator }) })),
+    cited: outcome.status === 'error' ? [] : outcome.excerpts.map(({ file, locator }) => ({ file, locator, expected: isExpected({ filename: file, locator }) })),
     ...counts,
     costUsd: costUsd(modelId, counts),
-    cold: counts.cacheWriteTokens > 0,
+    cold: arm === 'cag' && counts.cacheWriteTokens > 0,
     latencyMs: outcome.latencyMs,
     toolCalls: outcome.toolCalls,
   };
@@ -102,7 +102,7 @@ export const runArm = async (
   const rows: AnswerRow[] = [];
   for (const question of questions) {
     const outcome = context ? await askCag(deps, context, question.question) : await askRag(deps, scope, question.question);
-    rows.push(scoreOutcome(deps.modelId, question, outcome));
+    rows.push(scoreOutcome(deps.modelId, arm, question, outcome));
     onRow(rows);
   }
   return rows;

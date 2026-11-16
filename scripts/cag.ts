@@ -51,11 +51,16 @@ export type Outcome = {
 
 export const askCag = async ({ db, model, modelId }: { db: Db; model: ModelCall; modelId: string }, context: CagContext, question: string): Promise<Outcome> => {
   const started = performance.now();
-  const message = await model(cagParams(modelId, context, question), () => {});
+  const called = await model(cagParams(modelId, context, question), () => {}).then(
+    (message) => ({ message }),
+    (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }),
+  );
   const latencyMs = Math.round(performance.now() - started);
+  if ('error' in called) return { status: 'error', error: called.error, answer: '', results: [], excerpts: [], usages: [], latencyMs, toolCalls: 0 };
+  const { message } = called;
   const base = { usages: [message.usage], latencyMs, toolCalls: 0 };
   if (message.stop_reason === 'refusal') return { ...base, status: 'declined', answer: '', results: [], excerpts: [] };
-  if (message.stop_reason !== 'end_turn' && message.stop_reason !== 'max_tokens') throw new Error(`unexpected stop reason ${message.stop_reason}`);
+  if (message.stop_reason !== 'end_turn' && message.stop_reason !== 'max_tokens') return { ...base, status: 'error', error: `unexpected stop reason ${message.stop_reason}`, answer: '', results: [], excerpts: [] };
   const blocks = message.content.flatMap((block) => (block.type === 'text' ? [block] : []));
   const citations: TextCitation[] = blocks.flatMap((block) => block.citations ?? []);
   const { results, excerpts } = await checkCitations(db, context.sent, context.scope, citations, () => null);

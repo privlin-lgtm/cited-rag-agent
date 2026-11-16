@@ -40,8 +40,8 @@ export const countText = (report: Awaited<ReturnType<typeof countCag>>, modelId:
     `characters      ${report.characters}`,
     `input tokens    ${report.tokens} (exact, from messages.count_tokens, one question included)`,
     `fits            ${report.fits ? 'yes' : 'NO'}: ${report.tokens} + ${MAX_TOKENS} output of ${CONTEXT_TOKENS}`,
-    `cold question   $${report.coldUsd.toFixed(4)} for the corpus (5-minute cache write), plus output`,
-    `warm question   $${report.warmUsd.toFixed(4)} for the corpus (cache read), plus output`,
+    `cold question   $${report.coldUsd.toFixed(4)} for the prompt (5-minute cache write), plus output`,
+    `warm question   $${report.warmUsd.toFixed(4)} for the prompt (cache read), plus output`,
   ].join('\n');
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

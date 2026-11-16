@@ -156,6 +156,21 @@ describe('the CAG arm', () => {
     expect(summary.warmMeanUsd).toBeCloseTo((rows[1].costUsd + rows[2].costUsd) / 2, 10);
   });
 
+  it('records a failed call or an unexpected stop as an error row and goes on, with nothing cited', async () => {
+    let n = 0;
+    const model: ModelCall = async () => {
+      n++;
+      if (n === 1) throw new Error('529 overloaded');
+      return reply([text('cut')], 'model_context_window_exceeded' as StopReason, usage(100_000, 0));
+    };
+    const rows = await runArm({ db: fixture.db, model, modelId: 'claude-sonnet-5-5', embed: fakeEmbedder }, 'cag', [question('a', ['cancel.md', '§ Cancellation']), question('b', ['cancel.md', '§ Cancellation'])], documents);
+    expect(rows.map(({ status, error, cited, cold }) => ({ status, error, cited, cold }))).toEqual([
+      { status: 'error', error: '529 overloaded', cited: [], cold: false },
+      { status: 'error', error: 'unexpected stop reason model_context_window_exceeded', cited: [], cold: true },
+    ]);
+    expect(rows[1].costUsd).toBeGreaterThan(0.25);
+  });
+
   it('stops on a stale database before calling the model', async () => {
     const model = vi.fn<ModelCall>();
     await expect(runArm({ db: fixture.db, model, modelId: 'claude-sonnet-5-5', embed: fakeEmbedder }, 'cag', [question('a', ['cancel.md', '§ Cancellation'])], [{ filename: 'ghost.md', sha256: 'a'.repeat(64) }])).rejects.toThrow(/ghost\.md/);
@@ -168,7 +183,7 @@ describe('the RAG arm', () => {
     const calls: ModelParams[] = [];
     const model: ModelCall = async (params) => {
       calls.push(structuredClone(params));
-      if (calls.length === 1) return reply([text('Looking.'), { type: 'tool_use', id: 't1', name: 'search_documents', input: { query: 'cancel a remittance transfer', k: 3 }, caller: { type: 'direct' } }], 'tool_use');
+      if (calls.length === 1) return reply([text('Looking.'), { type: 'tool_use', id: 't1', name: 'search_documents', input: { query: 'cancel a remittance transfer', k: 3 }, caller: { type: 'direct' } }], 'tool_use', usage(500, 0));
       const results = params.messages
         .flatMap((message) => (typeof message.content === 'string' ? [] : message.content))
         .filter((block): block is ToolResultBlockParam => block.type === 'tool_result')
@@ -177,7 +192,7 @@ describe('the RAG arm', () => {
     };
     const [row] = await runArm({ db: fixture.db, model, modelId: 'claude-sonnet-5-5', embed: fakeEmbedder }, 'rag', [question('cancel', ['cancel.md', '§ Cancellation'])], documents);
     expect(calls[0].tools?.map((tool) => ('name' in tool ? tool.name : ''))).toContain('search_documents');
-    expect(row).toMatchObject({ status: 'complete', rightSource: true, passed: 1, citations: 1, toolCalls: 1, inputTokens: 100, outputTokens: 40, cold: false, answer: 'Cancel within 30 minutes.' });
+    expect(row).toMatchObject({ status: 'complete', rightSource: true, passed: 1, citations: 1, toolCalls: 1, inputTokens: 100, outputTokens: 40, cacheWriteTokens: 500, cold: false, answer: 'Cancel within 30 minutes.' });
   });
 
   it('records a model error as an error row and goes on', async () => {
@@ -185,9 +200,9 @@ describe('the RAG arm', () => {
       throw new Error('529 overloaded');
     };
     const rows = await runArm({ db: fixture.db, model, modelId: 'claude-sonnet-5-5', embed: fakeEmbedder }, 'rag', [question('a', ['cancel.md', '§ Cancellation']), question('b', ['cancel.md', '§ Cancellation'])], documents);
-    expect(rows.map(({ status, error }) => [status, error])).toEqual([
-      ['error', '529 overloaded'],
-      ['error', '529 overloaded'],
+    expect(rows.map(({ status, error, cited }) => [status, error, cited])).toEqual([
+      ['error', '529 overloaded', []],
+      ['error', '529 overloaded', []],
     ]);
   });
 });
