@@ -15,7 +15,9 @@
     "corpus:fetch": "tsx scripts/corpus-fetch.ts",
     "ingest:corpus": "tsx --env-file-if-exists=.env.local scripts/ingest-corpus.ts",
     "eval": "tsx --env-file-if-exists=.env.local scripts/eval.ts",
-    "smoke:sql": "tsx --env-file-if-exists=.env.local scripts/smoke-sql.ts"
+    "smoke:sql": "tsx --env-file-if-exists=.env.local scripts/smoke-sql.ts",
+    "cag:count": "tsx --env-file-if-exists=.env.local scripts/cag-count.ts",
+    "eval:answers": "tsx --env-file-if-exists=.env.local scripts/answer-eval.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "1.6.0",
