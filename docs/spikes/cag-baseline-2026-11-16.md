@@ -17,11 +17,13 @@ The code lives on the unmerged spike branch `spike/cag-baseline` (PR #61): `npm 
 | --- | --- | --- |
 | Right source cited | 13/14 | 14/14 |
 | Citations that pass the check | 127/127 | 156/156 |
-| Answers right / partly / wrong | 13 / 1 / 0 | 13 / 1 / 0 |
+| Answers right / partly / wrong | 12 / 2 / 0 | 13 / 1 / 0 |
 | Cost per question | $0.041 | $1.077 cold, $0.053 warm |
 | Median latency | 9.3 s | 7.6 s |
 
-The two arms differed on two questions. On `table-small-sender-domestic`, RAG's retrieval missed the compliance guide's example on p. 17, so its answer hedged the key point; CAG quoted it. On `wrong-account-number`, CAG's answer had a heading that implied a refund is owed when recovery fails, which contradicts §1005.33(h); RAG's answer was correct.
+The arms differed on three questions. On `table-small-sender-domestic`, RAG's retrieval missed the compliance guide's example on p. 17, so its answer hedged the key point; CAG quoted it. On `agent-mistakes`, RAG's EU section implied PSD2 has no general agent-liability rule, missing Art. 20(2); CAG quoted it. On `wrong-account-number`, CAG's answer had a heading that implied a refund is owed when recovery fails, which contradicts §1005.33(h); RAG's answer was correct.
+
+RAG's misses are search gaps that its answers flag. CAG's one miss is a misstatement that its answer does not flag. A one-answer gap on 14 questions is too small to call either arm better on quality.
 
 ## Decision rule (set before the run)
 
@@ -38,7 +40,7 @@ A cold question costs about 11 times the demo's $0.10 budget hold, so CAG would 
 ## Caveats
 
 - Each arm ran once, on 14 questions.
-- The answers were marked by Claude against the corpus, not by a person. The two rows where the arms differ have been sent to a second review, the LLM Council. These marks stand until it answers.
+- The answers were marked by Claude against the corpus, not by a person. The rows where the arms differ were then reviewed by an LLM Council of four models (GPT, Gemini, Grok and Claude Opus). All four upheld the two differing rows, and three of the four downgraded RAG on `agent-mistakes`. A re-mark of all 14 by a non-Claude reviewer has not been done.
 - The CAG arm reused the app's prompt, which mentions search tools.
 - Per-sentence `search_result` blocks roughly double the corpus tokens. A cheaper CAG request with one block per chunk would need a different citation check.
 
