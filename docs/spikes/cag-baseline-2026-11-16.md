@@ -38,7 +38,7 @@ A cold question costs about 11 times the demo's $0.10 budget hold, so CAG would 
 ## Caveats
 
 - Each arm ran once, on 14 questions.
-- The answers were marked by Claude against the corpus, not by a person.
+- The answers were marked by Claude against the corpus, not by a person. The two rows where the arms differ have been sent to a second review, the LLM Council. These marks stand until it answers.
 - The CAG arm reused the app's prompt, which mentions search tools.
 - Per-sentence `search_result` blocks roughly double the corpus tokens. A cheaper CAG request with one block per chunk would need a different citation check.
 
