@@ -90,8 +90,8 @@ describe('the token count', () => {
     expect(seen).toHaveLength(1);
     expect(seen[0]).not.toHaveProperty('max_tokens');
     expect(seen[0]).not.toHaveProperty('tools');
-    const { max_tokens: _, ...expected } = cagParams('claude-sonnet-5-5', context, 'How long to cancel?');
-    expect(seen[0]).toEqual(expected);
+    const { model, system, thinking, messages } = cagParams('claude-sonnet-5-5', context, 'How long to cancel?');
+    expect(seen[0]).toEqual({ model, system, thinking, messages });
     expect(report).toMatchObject({ documents: 4, chunks: context.chunks, passages: context.blocks.length, tokens: 200_000, fits: true });
     expect(report.coldUsd).toBeCloseTo(0.5, 10);
     expect(report.warmUsd).toBeCloseTo(0.02, 10);
@@ -176,7 +176,7 @@ describe('the RAG arm', () => {
       return reply([text('Cancel within 30 minutes.', [cite(titled(results, 'cancel.md · § Cancellation'), 0)])], 'end_turn');
     };
     const [row] = await runArm({ db: fixture.db, model, modelId: 'claude-sonnet-5-5', embed: fakeEmbedder }, 'rag', [question('cancel', ['cancel.md', '§ Cancellation'])], documents);
-    expect(calls[0].tools?.map(({ name }) => name)).toContain('search_documents');
+    expect(calls[0].tools?.map((tool) => ('name' in tool ? tool.name : ''))).toContain('search_documents');
     expect(row).toMatchObject({ status: 'complete', rightSource: true, passed: 1, citations: 1, toolCalls: 1, inputTokens: 100, outputTokens: 40, cold: false, answer: 'Cancel within 30 minutes.' });
   });
 
