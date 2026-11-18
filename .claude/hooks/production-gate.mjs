@@ -31,7 +31,9 @@ const blocked = [
   new RegExp(`${vercel}\\s+(?:promote|rollback|alias)\\b`, 'i'),
 ];
 
-const readsEnvFile = /(?<![\w.-])\.env(?![\w-])(?!\.example\b)/.test(raw.replace(/--env-file-if-exists=\S+|\bcp\s+\.env\.example\s+\.env\.local\b/g, ''));
+const readsEnvFile =
+  /(?<![\w.-])\.env(?![\w-])(?!\.example\b)/.test(raw.replace(/--env-file-if-exists=\S+|\bcp\s+\.env\.example\s+\.env\.local\b/g, '')) ||
+  (/--env-file-if-exists=/.test(raw) && /\s(?:-e|-p|--eval|--print)(?:[=\s]|$)/.test(raw));
 
 if (readsEnvFile) {
   console.error('Blocked: .env, .env.local and .env.*.local are never read. Scripts load them with --env-file-if-exists.');
@@ -40,7 +42,7 @@ if (readsEnvFile) {
 
 if (
   /\bVERCEL_ENV\s*=\s*["']?production\b/i.test(raw) ||
-  /\bgh\s+api\b.*(?:\/pulls\/\d+\/[\w/]*merge\b|\/merges\b|\bgraphql\b.*merge|git\/refs\/heads\/(?:main|master|sandbox|qa)\b|\bbranch=(?:main|master|sandbox|qa)\b)/is.test(raw) ||
+  /\bgh\s+api\b.*(?:\/pulls\/\d+\/[\w/]*merge\b|\/merges\b|\bgraphql\b.*\b(?:mergePullRequest|enablePullRequestAutoMerge|mergeBranch)\b|git\/refs\/heads\/(?:main|master|sandbox|qa)\b|\bbranch=(?:main|master|sandbox|qa)\b)/is.test(raw) ||
   (/\bgh\s+api\b.*\/contents\//s.test(raw) &&
     /\s(?:-X|--method)[=\s]*(?:PUT|DELETE|POST|PATCH)\b|\s-[fF]\s|\s--(?:raw-)?field[=\s]|\s--input[=\s]/i.test(raw) &&
     !/\bbranch=(?!(?:main|master|sandbox|qa)\b)[\w./-]+/.test(raw)) ||
