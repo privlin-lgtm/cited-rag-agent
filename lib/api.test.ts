@@ -135,6 +135,19 @@ describe('POST /api/ask', () => {
     expect(await spent('anthropic:usd')).toBe(400);
   });
 
+  it('still ends the stream with a done line and closes it when releasing the $0.10 hold fails, and logs the failure', async () => {
+    const db: ApiDeps['db'] = {
+      ...fixture.db,
+      query: (text, params) => (params?.[0] === 'anthropic:usd' && params[2] === -100_000 ? Promise.reject(new Error('Neon blip')) : fixture.db.query(text, params)),
+    };
+    script = () => reply([text('Cancel within 30 minutes.')], 'end_turn');
+    const lines = await events(await handleAsk(askRequest({ question: 'How long to cancel?' }), deps({ db })));
+    expect(lines.map(({ type }) => type)).toEqual(['answer', 'citations', 'done']);
+    expect(info).toHaveBeenCalledOnce();
+    expect(errorLog.mock.calls.map(([line]) => JSON.parse(String(line)))).toEqual([{ event: 'release_failed', message: 'Error: Neon blip' }]);
+    expect(await spent('anthropic:usd')).toBe(100_400);
+  });
+
   it('shows a plain spending sentence, not the SDK JSON, when the workspace usage limit is reached, and logs the raw text', async () => {
     const raw =
       '400 {"type":"error","error":{"type":"invalid_request_error","message":"You have reached your specified workspace API usage limits. You will regain access on 2026-11-01 at 00:00 UTC."},"request_id":"req_011CZ"}';
