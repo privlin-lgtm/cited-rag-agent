@@ -65,7 +65,8 @@ jobs:
           { grep -Evf "$RUNNER_TEMP/skip-patterns.txt" "$RUNNER_TEMP/changed.txt" || [ $? -eq 1 ]; } > "$RUNNER_TEMP/reviewable.txt"
           if { [ "$mode" = full ] || [ "$mode" = incremental ]; } && [ ! -s "$RUNNER_TEMP/reviewable.txt" ]; then
             mode=trivial
-            if grep -Eq "$LOCK_RE" "$RUNNER_TEMP/changed.txt"; then
+            { grep -E "$LOCK_RE" "$RUNNER_TEMP/changed.txt" || [ $? -eq 1 ]; } > "$RUNNER_TEMP/locks.txt"
+            if [ -s "$RUNNER_TEMP/locks.txt" ] && ! xargs -r -d '\n' git diff --quiet "$base" "$HEAD_SHA" -- < "$RUNNER_TEMP/locks.txt"; then
               mode=lockfile
             fi
           fi
@@ -159,7 +160,7 @@ jobs:
               [ "$PREV_IMPORTANT" -eq 0 ] || { echo "::error::$PREV_IMPORTANT important finding(s) on $short are still open"; exit 1; }
               exit 0 ;;
             trivial)
-              echo "Not sent for review: every changed file matches the skip list (lockfiles, images, screenshot baselines, .github/claude-review/skip.txt)." >> "$GITHUB_STEP_SUMMARY"
+              echo "Not sent for review: every changed file matches the skip list (images, screenshot baselines, .github/claude-review/skip.txt, or a lockfile the pull request itself does not change)." >> "$GITHUB_STEP_SUMMARY"
               [ "$PREV_IMPORTANT" -eq 0 ] || { echo "::error::$PREV_IMPORTANT important finding(s) from ${PREV:0:7} are still open"; exit 1; }
               exit 0 ;;
             lockfile)

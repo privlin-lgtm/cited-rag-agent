@@ -106,7 +106,7 @@ From nothing to the spec's four tables:
   - On the production URL itself, before production is called live: `/api/health` shows production's database, one example question gives checked citations and none unchecked, an upload can be asked about and then deleted, and one Vercel cron cleanup run appears in the production logs.
 - **M6:**
   - The README renders on GitHub.
-  - Tests show a visitor who leaves after the first tool round causing no second model call, with the first call's cost in the window and `abandoned` in the log line; a `tool_use` stop with no tool block ending in the explicit error; a heading, a table with a citation in a cell, and indented list items rendered as the spec says; the Excerpts column's messages; and the page's sections in the stacked order.
+  - Tests show a visitor who leaves after the first tool round causing no second model call, with the first call's cost in the window and `abandoned` in the log line (in tests; on Vercel the run is never told, see spec.md:132); a `tool_use` stop with no tool block ending in the explicit error; a heading, a table with a citation in a cell, and indented list items rendered as the spec says; the Excerpts column's messages; and the page's sections in the stacked order.
   - The test suite passes while `npm run build` runs alongside it (`hookTimeout` 30 s).
   - On the `m6-readme` preview at 390 px, the sections stack in that order and nothing scrolls sideways except a wide table.
   - The PSD2 licence names EUR-Lex's legal notice, and the README quotes its acknowledgement.
