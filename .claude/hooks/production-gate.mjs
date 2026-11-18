@@ -33,7 +33,7 @@ const blocked = [
 
 const readsEnvFile =
   /(?<![\w.-])\.env(?![\w-])(?!\.example\b)/.test(raw.replace(/--env-file-if-exists=\S+|\bcp\s+\.env\.example\s+\.env\.local\b/g, '')) ||
-  (/--env-file-if-exists=/.test(raw) && /\s(?:-e|-p|--eval|--print)(?:[=\s]|$)/.test(raw));
+  (/--env-file-if-exists=/.test(raw) && /\s(?:-[a-zA-Z]*[ep][a-zA-Z]*|--eval|--print)(?:[=\s]|$)/.test(raw));
 
 if (readsEnvFile) {
   console.error('Blocked: .env, .env.local and .env.*.local are never read. Scripts load them with --env-file-if-exists.');
