@@ -49,8 +49,8 @@ From nothing to the spec's four tables:
 - `documents`, `chunks` and `usage_windows`, created in `0001_init.sql`, along with the `vector` extension and the HNSW and GIN indexes.
 
 ## Model split
-- **Claude Code, Sonnet 5.5, the build default:** implements M1–M6 from this plan. Its coding scores match Fable's on published benchmarks; it's faster, and it follows a tight spec literally.
-- **Claude Code, Fable 5.1, the judgement steps:**
+- **(As built in October)** **Claude Code, Sonnet 5.5, the build default:** implements M1–M6 from this plan. Its coding scores match Fable's on published benchmarks; it's faster, and it follows a tight spec literally.
+- **(As built in October)** **Claude Code, Fable 5.1, the judgement steps:**
   - plan-mode reviews of the spec and of each milestone's approach;
   - the design of M3's agent loop and citation check (plan mode first, then Sonnet implements);
   - the verifier pass before each PR;
@@ -61,7 +61,7 @@ From nothing to the spec's four tables:
   - The `verifier` and `architect` subagents carried `model: fable` in their frontmatter, so they ran on Fable whenever the Sonnet session called them. Since 10 Nov 2026 they carry `model: inherit` and run on the session's model. `AGENTS.md` tells the session to call `verifier` before every PR, and `architect` after the same test fails twice.
 
   Fable has its own weekly allowance on Paul's Max plan (separate from the main limit; usage credits off), so splitting the work spreads it across two limits. The constraint block's "Target Model" line names the coding model (Opus 5.5 since 10 Nov 2026), and its rules apply to every model.
-- **First-pass PR review:** brought forward from M6 by Paul's decision on 9 Oct. PR #15 (`fix/pr-reviewer`) adds a reviewer on Opus 5.5 that applies REVIEW.md to every non-draft pull request from this repository. The Fable verifier still runs before each PR. Whether the reviewer gets its secret, and its spend, is Paul's decision, made with his other agent settings.
+- **First-pass PR review:** brought forward from M6 by Paul's decision on 9 Oct. PR #15 (`fix/pr-reviewer`) adds a reviewer on Opus 5.5 that applies REVIEW.md to every non-draft pull request from this repository. The verifier (session model) still runs before each PR. Whether the reviewer gets its secret, and its spend, is Paul's decision, made with his other agent settings.
 - **From 10 Nov 2026 (Paul's rule):** Opus 5.5 for coding and everything else, and as the Claude Code default model, because subagents inherit it. Fable 5.2 only for planning, big architecture or hard-bug calls, and only when Paul asks. A one-evening Fable coding trial on 9 Nov used 46% of the Fable meter. The app's runtime model does not change without a test in this repo.
 - **App runtime:** Claude Sonnet 5.5 for the agent ($2 / $10 per M tokens); Voyage `voyage-4` for embeddings.
 
@@ -106,11 +106,11 @@ From nothing to the spec's four tables:
   - On the production URL itself, before production is called live: `/api/health` shows production's database, one example question gives checked citations and none unchecked, an upload can be asked about and then deleted, and one Vercel cron cleanup run appears in the production logs.
 - **M6:**
   - The README renders on GitHub.
-  - Tests show a visitor who leaves after the first tool round causing no second model call, with the first call's cost in the window and `abandoned` in the log line; a `tool_use` stop with no tool block ending in the explicit error; a heading, a table with a citation in a cell, and indented list items rendered as the spec says; the Excerpts column's messages; and the page's sections in the stacked order.
+  - Tests show a visitor who leaves after the first tool round causing no second model call, with the first call's cost in the window and `abandoned` in the log line (in tests; on Vercel the run is never told, see spec.md:132); a `tool_use` stop with no tool block ending in the explicit error; a heading, a table with a citation in a cell, and indented list items rendered as the spec says; the Excerpts column's messages; and the page's sections in the stacked order.
   - The test suite passes while `npm run build` runs alongside it (`hookTimeout` 30 s).
   - On the `m6-readme` preview at 390 px, the sections stack in that order and nothing scrolls sideways except a wide table.
   - The PSD2 licence names EUR-Lex's legal notice, and the README quotes its acknowledgement.
-  - In the final walk-through, a question left after its first step shows `"status":"abandoned"` in the production logs.
+  - In the final walk-through, a question left after its first step shows `"status":"abandoned"` in the production logs (replaced 2 Nov 2026: not reported on Vercel; see spec.md:132).
   - Lighthouse scores at least 90 for performance and accessibility on production.
   - The 5-minute demo has been rehearsed once end to end.
 

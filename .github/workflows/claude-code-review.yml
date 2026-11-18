@@ -10,7 +10,7 @@ concurrency:
 
 jobs:
   claude-review:
-    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event.pull_request.draft == false && github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     permissions:
@@ -19,7 +19,7 @@ jobs:
       issues: write
       id-token: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
@@ -31,8 +31,8 @@ jobs:
           PR: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          AUTHOR: ${{ github.event.pull_request.user.login }}
           HAS_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+          LOCK_RE: '(^|/)(package-lock\.json|deno\.lock|pnpm-lock\.yaml|yarn\.lock)$'
           SKIP_RE: '(^|/)(package-lock\.json|deno\.lock|pnpm-lock\.yaml|yarn\.lock)$|(^|/)__screenshots__/|\.(png|jpe?g|gif|webp|ico|woff2?|ttf|otf|pdf|zip|mp4|mov)$'
         run: |
           set -euo pipefail
@@ -48,9 +48,7 @@ jobs:
           git cat-file -e "$rules_ref:.github/claude-review/prompt.md" 2>/dev/null || rules_ref="$HEAD_SHA"
           mode=full
           range="$base..$HEAD_SHA"
-          if [ "$AUTHOR" = "dependabot[bot]" ]; then
-            mode=dependabot
-          elif [ "$HAS_TOKEN" != true ]; then
+          if [ "$HAS_TOKEN" != true ]; then
             mode=nosecret
           elif [ "$prev" = "$HEAD_SHA" ]; then
             mode=already
@@ -66,7 +64,16 @@ jobs:
           fi
           { grep -Evf "$RUNNER_TEMP/skip-patterns.txt" "$RUNNER_TEMP/changed.txt" || [ $? -eq 1 ]; } > "$RUNNER_TEMP/reviewable.txt"
           if { [ "$mode" = full ] || [ "$mode" = incremental ]; } && [ ! -s "$RUNNER_TEMP/reviewable.txt" ]; then
+            { grep -E "$LOCK_RE" "$RUNNER_TEMP/changed.txt" || [ $? -eq 1 ]; } > "$RUNNER_TEMP/locks.txt"
+            own_now=$(xargs -r -d '\n' git diff -U0 "$base" "$HEAD_SHA" -- < "$RUNNER_TEMP/locks.txt" | git patch-id --stable | cut -d' ' -f1)
+            own_prev=""
+            if [ "$mode" = incremental ] && [ -n "$own_now" ]; then
+              own_prev=$(xargs -r -d '\n' git diff -U0 "$(git merge-base "origin/$BASE_REF" "$prev")" "$prev" -- < "$RUNNER_TEMP/locks.txt" | git patch-id --stable | cut -d' ' -f1)
+            fi
             mode=trivial
+            if [ -n "$own_now" ] && [ "$own_now" != "$own_prev" ]; then
+              mode=lockfile
+            fi
           fi
           {
             echo "mode=$mode"
@@ -111,7 +118,7 @@ jobs:
       - name: Review
         id: claude
         if: steps.scope.outputs.mode == 'full' || steps.scope.outputs.mode == 'incremental'
-        uses: anthropics/claude-code-action@v1
+        uses: anthropics/claude-code-action@5a856893345e332afa621934082d8c660c26d689 # v1.0.282
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           github_token: ${{ github.token }}
@@ -158,13 +165,13 @@ jobs:
               [ "$PREV_IMPORTANT" -eq 0 ] || { echo "::error::$PREV_IMPORTANT important finding(s) on $short are still open"; exit 1; }
               exit 0 ;;
             trivial)
-              echo "Not sent for review: every changed file matches the skip list (lockfiles, images, screenshot baselines, .github/claude-review/skip.txt)." >> "$GITHUB_STEP_SUMMARY"
+              echo "Not sent for review: every changed file matches the skip list (images, screenshot baselines, .github/claude-review/skip.txt, or a lockfile the pull request itself does not change)." >> "$GITHUB_STEP_SUMMARY"
               [ "$PREV_IMPORTANT" -eq 0 ] || { echo "::error::$PREV_IMPORTANT important finding(s) from ${PREV:0:7} are still open"; exit 1; }
               exit 0 ;;
-            dependabot)
-              echo "::notice::Not reviewed: a Dependabot update. Bot pull requests get no secrets and a read-only token, so CI is the only check on this one."
-              echo "Not reviewed: a Dependabot update. CI is the only check on this one." >> "$GITHUB_STEP_SUMMARY"
-              exit 0 ;;
+            lockfile)
+              echo "::error::Lockfile-only change: review by hand."
+              echo "Not reviewed: the only reviewable change is a lockfile. Review it by hand." >> "$GITHUB_STEP_SUMMARY"
+              exit 1 ;;
             nosecret)
               echo "**Not reviewed.** This repository has no \`CLAUDE_CODE_OAUTH_TOKEN\` secret, so the reviewer cannot run. Add the secret, then re-run this check." > "$body"
               post
