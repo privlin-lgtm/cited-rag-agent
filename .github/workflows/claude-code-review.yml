@@ -64,9 +64,14 @@ jobs:
           fi
           { grep -Evf "$RUNNER_TEMP/skip-patterns.txt" "$RUNNER_TEMP/changed.txt" || [ $? -eq 1 ]; } > "$RUNNER_TEMP/reviewable.txt"
           if { [ "$mode" = full ] || [ "$mode" = incremental ]; } && [ ! -s "$RUNNER_TEMP/reviewable.txt" ]; then
-            mode=trivial
             { grep -E "$LOCK_RE" "$RUNNER_TEMP/changed.txt" || [ $? -eq 1 ]; } > "$RUNNER_TEMP/locks.txt"
-            if [ -s "$RUNNER_TEMP/locks.txt" ] && ! xargs -r -d '\n' git diff --quiet "$base" "$HEAD_SHA" -- < "$RUNNER_TEMP/locks.txt"; then
+            own_now=$(xargs -r -d '\n' git diff "$base" "$HEAD_SHA" -- < "$RUNNER_TEMP/locks.txt" | git patch-id --stable | cut -d' ' -f1)
+            own_prev=""
+            if [ "$mode" = incremental ] && [ -n "$own_now" ]; then
+              own_prev=$(xargs -r -d '\n' git diff "$(git merge-base "origin/$BASE_REF" "$prev")" "$prev" -- < "$RUNNER_TEMP/locks.txt" | git patch-id --stable | cut -d' ' -f1)
+            fi
+            mode=trivial
+            if [ -n "$own_now" ] && [ "$own_now" != "$own_prev" ]; then
               mode=lockfile
             fi
           fi
