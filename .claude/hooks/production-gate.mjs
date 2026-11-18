@@ -41,6 +41,9 @@ if (readsEnvFile) {
 if (
   /\bVERCEL_ENV\s*=\s*["']?production\b/i.test(raw) ||
   /\bgh\s+api\b.*(?:\/pulls\/\d+\/[\w/]*merge\b|\/merges\b|\bgraphql\b.*merge|git\/refs\/heads\/(?:main|master|sandbox|qa)\b|\bbranch=(?:main|master|sandbox|qa)\b)/is.test(raw) ||
+  (/\bgh\s+api\b.*\/contents\//s.test(raw) &&
+    /\s(?:-X|--method)[=\s]*(?:PUT|DELETE|POST|PATCH)\b|\s-[fF]\s|\s--(?:raw-)?field[=\s]|\s--input[=\s]/i.test(raw) &&
+    !/\bbranch=(?!(?:main|master|sandbox|qa)\b)[\w./-]+/.test(raw)) ||
   blocked.some((pattern) => pattern.test(command)) ||
   command.split(/&&|\|\||[;|\n]/).some(pushesToGuarded)
 ) {
