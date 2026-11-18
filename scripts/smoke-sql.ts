@@ -9,6 +9,7 @@ import { ingestDocument } from '../lib/ingest';
 import { addCost, addEmbedTokens, assertEmbedBudget, deleteExpiredWindows, releaseBudget, reserveBudget, reserveQuestion, reserveUpload } from '../lib/limits';
 import { keywordSearch, semanticSearch } from '../lib/search';
 import { ingestUpload } from '../lib/upload';
+import { CORPUS_CHUNKS_SQL } from './cag';
 import { corpusState } from './eval';
 import { isApplied, migrate } from './migrate';
 
@@ -63,6 +64,8 @@ export const steps: SmokeStep[] = [
   async ({ db, step }) => {
     step('eval: corpus freshness select');
     await corpusState(db);
+    step('cag: every chunk of a collection, in file and chunk order');
+    if (!(await db.query(CORPUS_CHUNKS_SQL, [COLLECTION])).length) throw new Error('no chunks loaded for CAG');
   },
   async ({ db, step }) => {
     step('limits: reserve question and upload, reserve and release budget, add cost and embedding tokens, check embedding budget, clear expired windows');

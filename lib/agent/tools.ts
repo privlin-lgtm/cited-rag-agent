@@ -61,7 +61,7 @@ const text = (value: string): TextBlockParam => ({ type: 'text', text: value });
 
 const failed = (input: unknown, message: string): ToolRun => ({ content: [text(message)], entries: [], hits: [], input, isError: true, error: message });
 
-const asRun = (input: unknown, found: (Omit<Hit, 'score'> & { score: number | null })[], extra: Partial<ToolRun> = {}): ToolRun => {
+export const asRun = (input: unknown, found: (Omit<Hit, 'score'> & { score: number | null })[], extra: Partial<ToolRun> = {}): ToolRun => {
   const usable = found.map((hit) => ({ hit, blocks: splitSentences(hit.content) })).filter(({ blocks }) => blocks.length);
   return {
     content: usable.length
