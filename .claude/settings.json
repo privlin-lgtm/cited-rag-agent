@@ -1,5 +1,7 @@
 {
-  "env": { "CLAUDE_CODE_USE_POWERSHELL_TOOL": "0" },
+  "env": {
+    "CLAUDE_CODE_USE_POWERSHELL_TOOL": "0"
+  },
   "permissions": {
     "defaultMode": "default",
     "deny": [
@@ -10,7 +12,27 @@
       "Bash(git push * master)",
       "Bash(git push * main)",
       "Bash(git push * sandbox)",
-      "Bash(git push * qa)"
+      "Bash(git push * qa)",
+      "Bash(cat .env*)",
+      "Bash(cat ./.env*)",
+      "mcp__github__merge_pull_request",
+      "mcp__github__enable_pr_auto_merge",
+      "mcp__Vercel__create_deployment",
+      "mcp__Vercel__request_promote",
+      "mcp__Vercel__request_rollback",
+      "mcp__Vercel__assign_alias",
+      "mcp__Vercel__start_rolling_release",
+      "mcp__Vercel__approve_rolling_release_stage",
+      "mcp__Vercel__complete_rolling_release",
+      "mcp__vercel__create_deployment",
+      "mcp__vercel__request_promote",
+      "mcp__vercel__request_rollback",
+      "mcp__vercel__assign_alias",
+      "mcp__vercel__start_rolling_release",
+      "mcp__vercel__approve_rolling_release_stage",
+      "mcp__vercel__complete_rolling_release",
+      "mcp__Vercel__deploy_to_vercel",
+      "mcp__vercel__deploy_to_vercel"
     ],
     "allow": [
       "Bash(git status)",
@@ -31,13 +53,32 @@
     "PostToolUse": [
       {
         "matcher": "Edit|Write|MultiEdit",
-        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/no-placeholders.mjs\"" }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/no-placeholders.mjs\""
+          }
+        ]
       }
     ],
     "PreToolUse": [
       {
         "matcher": "Bash|PowerShell",
-        "hooks": [{ "type": "command", "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/production-gate.mjs\"" }]
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/production-gate.mjs\""
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/mcp-gate.mjs\""
+          }
+        ]
       }
     ]
   }

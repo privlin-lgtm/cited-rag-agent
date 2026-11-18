@@ -31,8 +31,16 @@ const blocked = [
   new RegExp(`${vercel}\\s+(?:promote|rollback|alias)\\b`, 'i'),
 ];
 
+const readsEnvFile = /(?<![\w.-])\.env(?![\w-])(?!\.example\b)/.test(raw.replace(/--env-file-if-exists=\S+|\bcp\s+\.env\.example\s+\.env\.local\b/g, ''));
+
+if (readsEnvFile) {
+  console.error('Blocked: .env, .env.local and .env.*.local are never read. Scripts load them with --env-file-if-exists.');
+  process.exit(2);
+}
+
 if (
   /\bVERCEL_ENV\s*=\s*["']?production\b/i.test(raw) ||
+  /\bgh\s+api\b.*(?:\/pulls\/\d+\/[\w/]*merge\b|\/merges\b|\bgraphql\b.*merge|git\/refs\/heads\/(?:main|master|sandbox|qa)\b|\bbranch=(?:main|master|sandbox|qa)\b)/is.test(raw) ||
   blocked.some((pattern) => pattern.test(command)) ||
   command.split(/&&|\|\||[;|\n]/).some(pushesToGuarded)
 ) {
