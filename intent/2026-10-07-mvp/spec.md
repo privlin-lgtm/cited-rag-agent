@@ -7,6 +7,7 @@ Revised 2026-10-14 with M5 (`m5-environments`): features 11 and 12 and Screens /
 Revised 2026-10-21 with M6 (`m6-readme`): features 6, 8, 9, 10 and 12, Concerns, Screens / routes and D3.
 Revised 2026-10-29 with the limit messages (`fix/limit-messages`): feature 10.
 Revised 2026-11-02 after the final walk on production: feature 10's server log (`abandoned` is not reported on Vercel).
+Revised 2026-11-19 with the answer prompt rules (PR #68): feature 8 (no answer in the documents, more than one jurisdiction).
 
 ## Stack
 - **App:** Next.js 16.4.5 (App Router, Route Handlers on the Node runtime), React 19.3.1, TypeScript `~5.9.3`, Tailwind CSS 4 with a few shadcn/ui components. Every version is pinned exactly except TypeScript (`~5.9.3`, patch updates only), and the lockfile is committed. Lint runs through the ESLint CLI, since `next lint` is gone in 16. Hosted on Vercel (Paul's Pro account), with functions in `fra1`.
