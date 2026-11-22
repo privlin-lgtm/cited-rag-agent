@@ -7,6 +7,7 @@ Revised 2026-10-14 with M5 (`m5-environments`): features 11 and 12 and Screens /
 Revised 2026-10-21 with M6 (`m6-readme`): features 6, 8, 9, 10 and 12, Concerns, Screens / routes and D3.
 Revised 2026-10-29 with the limit messages (`fix/limit-messages`): feature 10.
 Revised 2026-11-02 after the final walk on production: feature 10's server log (`abandoned` is not reported on Vercel).
+Revised 2026-11-19 with the answer prompt rules (PR #68): feature 8 (no answer in the documents, more than one jurisdiction).
 
 ## Stack
 - **App:** Next.js 16.4.5 (App Router, Route Handlers on the Node runtime), React 19.3.1, TypeScript `~5.9.3`, Tailwind CSS 4 with a few shadcn/ui components. Every version is pinned exactly except TypeScript (`~5.9.3`, patch updates only), and the lockfile is committed. Lint runs through the ESLint CLI, since `next lint` is gone in 16. Hosted on Vercel (Paul's Pro account), with functions in `fra1`.
@@ -112,6 +113,8 @@ Revised 2026-11-02 after the final walk on production: feature 10's server log (
      - A chunk cited through several indices is shown once, with all its cited sentences highlighted.
      - A failed citation shows in red as "unchecked", never as checked.
      - The answer header reads "N of M citations checked". An answer that cites nothing (such as a plain "the documents don't cover this") reads "no citations" in a neutral badge; red is kept for answers whose citations were given and none passed the check. A refusal by the model (stop reason `refusal`) shows only "Claude declined to answer this question.", with no badge.
+     - **No answer in the documents:** the answer says so plainly, says what was searched for, and suggests one more specific question the documents could answer. A question, asked or suggested, needs no citation, so this answer still reads "no citations".
+     - **More than one jurisdiction:** when a question could fall under more than one jurisdiction's rules (such as US Regulation E and the EU's PSD2) and does not say which, the answer covers each one separately under its own name, each with its own citations. If that would make the answer long, it gives a short version of each and asks which one the user means.
      - **The answer's own formatting:** the answer renders paragraphs, `**bold**` and list items (indented items join the same list). A Markdown heading line (`#` to `######`) shows as a bold paragraph without its markers. A run of two or more lines that start and end with `|` shows as a table: the first row is the header when a separator row (`|---|`) follows it, the separator is not shown, and each citation marker stays in the cell where it occurs. A wide table scrolls sideways inside the answer column.
 9. **Excerpts.** Beside the answer, each cited chunk shows its file, its locator and the chunk text with the cited sentences highlighted, plus a link to the source document.
    - **Markdown documents:** for a file whose name ends in `.md`, the excerpt renders inline Markdown for display only: `**bold**`, `` `code` `` (also inside bold), `[text](target)` as its text, `<br />` as a line break, `<sup>…</sup>` as superscript with a link inside shown as its text, and a heading marker (`#` to `######`) at the start of a block dropped. The highlighted blocks, the stored text and the citation check are unchanged. Other files show the stored text as it is.
