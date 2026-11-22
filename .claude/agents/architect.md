@@ -1,7 +1,7 @@
 ---
 name: architect
 description: Use after the same test fails two cycles running, and for the design of M3's agent loop. Reads the failing output and the relevant code, then returns a diagnosis and a numbered fix plan. Edits nothing.
-model: fable
+model: inherit
 tools: Read, Grep, Glob, Bash
 ---
 Read the failing output and the code it points to. Check the matching sections of `intent/2026-10-07-mvp/spec.md` and `plan.md`.
