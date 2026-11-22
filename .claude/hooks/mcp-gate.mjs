@@ -50,13 +50,14 @@ const checkMerge = () => {
   if (pr.state !== 'open') block(`PR #${number} is ${pr.state}, not open.`);
   if (pr.draft) block(`PR #${number} is a draft. Mark it ready for review first.`);
   if (pr.fork) block(`PR #${number} comes from a fork. Paul merges it himself.`);
+  if (args.expectedHeadSha !== pr.head) block(`expectedHeadSha must be PR #${number}'s head commit ${pr.head}, so GitHub refuses the merge if the PR moves after Paul approves.`);
 
   console.log(
     JSON.stringify({
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
         permissionDecision: 'ask',
-        permissionDecisionReason: `Merge PR #${number} "${pr.title}" at ${pr.head.slice(0, 7)} into sandbox with a merge commit? Approve only if you wrote "merge ${number}" for this PR and it had no newer commits than ${pr.head.slice(0, 7)}.`,
+        permissionDecisionReason: `Merge PR #${number} into sandbox with a merge commit, pinned to head ${pr.head}? Approve only if you wrote "merge ${number}" for this PR and it had no newer commits than ${pr.head.slice(0, 7)}. Title: ${String(pr.title).replace(/[\p{Cc}"]/gu, '').slice(0, 80)}`,
       },
     }),
   );
