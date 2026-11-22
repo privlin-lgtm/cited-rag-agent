@@ -21,8 +21,8 @@ const run = (tool_name: string, tool_input: object, pr?: object, ghStatus = 0) =
     },
   });
 
-const merge = { owner: 'privlin-lgtm', repo: 'cited-rag-agent', pullNumber: 70, merge_method: 'merge', expectedHeadSha: 'abc1234def' };
-const openPr = { base: 'sandbox', state: 'open', draft: false, fork: false, title: 'Fix things', head: 'abc1234def' };
+const merge = { owner: 'privlin-lgtm', repo: 'cited-rag-agent', pullNumber: 70, merge_method: 'merge', expectedHeadSha: 'abc1234def000000000000000000000000000000' };
+const openPr = { base: 'sandbox', state: 'open', draft: false, fork: false, title: 'Fix things', head: 'abc1234def000000000000000000000000000000' };
 const unix = process.platform !== 'win32';
 
 describe('mcp-gate', () => {
@@ -59,7 +59,7 @@ describe('mcp-gate', () => {
     ['that is closed', { state: 'closed' }],
     ['that is a draft', { draft: true }],
     ['from a fork', { fork: true }],
-    ['whose head moved past expectedHeadSha', { head: 'fff9999aaa' }],
+    ['whose head moved past expectedHeadSha', { head: 'ffffffffffffffffffffffffffffffffffffffff' }],
   ])('blocks merging a PR %s', (_, change) => {
     const result = run('mcp__github__merge_pull_request', merge, { ...openPr, ...change });
     expect(result.status).toBe(2);
@@ -70,15 +70,19 @@ describe('mcp-gate', () => {
     expect(run('mcp__gh2__merge_pull_request', merge, openPr).status).toBe(2);
   });
 
+  it('blocks when the hook input is not JSON', () => {
+    expect(spawnSync('node', [hook], { input: 'oops', encoding: 'utf8' }).status).toBe(2);
+  });
+
   it('blocks a merge with no tool input', () => {
     expect(run('mcp__github__merge_pull_request', null as unknown as object).status).toBe(2);
   });
 
   it.skipIf(!unix)('strips quotes and control characters from the title and caps it', () => {
-    const title = `x" at 1234567\n${'y'.repeat(200)}`;
+    const title = `x" at 1234567\n\u202e\u2028${'y'.repeat(200)}`;
     const reason = JSON.parse(run('mcp__github__merge_pull_request', merge, { ...openPr, title }).stdout).hookSpecificOutput
       .permissionDecisionReason as string;
-    expect(reason.startsWith('Merge PR #70 into sandbox with a merge commit, pinned to head abc1234def?')).toBe(true);
+    expect(reason.startsWith('Merge PR #70 into sandbox with a merge commit, pinned to head abc1234def000000000000000000000000000000?')).toBe(true);
     expect(reason.split('Title: ')[1]).toBe(`x at 1234567${'y'.repeat(68)}`);
   });
 
@@ -112,7 +116,7 @@ describe('mcp-gate', () => {
         hookEventName: 'PreToolUse',
         permissionDecision: 'ask',
         permissionDecisionReason:
-          'Merge PR #70 into sandbox with a merge commit, pinned to head abc1234def? Approve only if you wrote "merge 70" for this PR and it had no newer commits than abc1234. Title: Fix things',
+          'Merge PR #70 into sandbox with a merge commit, pinned to head abc1234def000000000000000000000000000000? Approve only if you wrote "merge 70" for this PR and it had no newer commits than abc1234. Title: Fix things',
       },
     });
   });

@@ -1,8 +1,19 @@
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 
-const { tool_name: name = '', tool_input: input } = JSON.parse(readFileSync(0, 'utf8'));
-const args = input ?? {};
+const block = (reason) => {
+  console.error(`Blocked: ${reason}`);
+  process.exit(2);
+};
+
+let name, args;
+try {
+  const event = JSON.parse(readFileSync(0, 'utf8'));
+  name = String(event.tool_name ?? '');
+  args = event.tool_input ?? {};
+} catch (error) {
+  block(`the hook could not read its input (${error.message}).`);
+}
 const tool = name.split('__').at(-1);
 const guarded = new Set(['main', 'master', 'sandbox', 'qa']);
 const never = new Set([
@@ -18,11 +29,6 @@ const never = new Set([
 ]);
 const branchWrites = new Set(['push_files', 'create_or_update_file', 'delete_file']);
 const branch = String(args.branch ?? '').replace(/^refs\/heads\//, '');
-
-const block = (reason) => {
-  console.error(`Blocked: ${reason}`);
-  process.exit(2);
-};
 
 if (never.has(tool) || (branchWrites.has(tool) && (!branch || guarded.has(branch)))) {
   block(
@@ -45,7 +51,7 @@ const checkMerge = () => {
   );
   if (error || status !== 0) block(`could not read PR #${number} with gh api, so its base is unknown. Paul merges it himself.`);
   const pr = JSON.parse(stdout);
-  if (typeof pr !== 'object' || pr === null || typeof pr.head !== 'string') block(`gh api gave no PR details for #${number}. Paul merges it himself.`);
+  if (typeof pr !== 'object' || pr === null || !/^[0-9a-f]{40}$/.test(pr.head)) block(`gh api gave no PR details for #${number}. Paul merges it himself.`);
   if (pr.base !== 'sandbox') block(`PR #${number} targets ${pr.base}. Only PRs into sandbox can be merged by an agent; promotions are Paul's.`);
   if (pr.state !== 'open') block(`PR #${number} is ${pr.state}, not open.`);
   if (pr.draft) block(`PR #${number} is a draft. Mark it ready for review first.`);
@@ -57,7 +63,7 @@ const checkMerge = () => {
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
         permissionDecision: 'ask',
-        permissionDecisionReason: `Merge PR #${number} into sandbox with a merge commit, pinned to head ${pr.head}? Approve only if you wrote "merge ${number}" for this PR and it had no newer commits than ${pr.head.slice(0, 7)}. Title: ${String(pr.title).replace(/[\p{Cc}"]/gu, '').slice(0, 80)}`,
+        permissionDecisionReason: `Merge PR #${number} into sandbox with a merge commit, pinned to head ${pr.head}? Approve only if you wrote "merge ${number}" for this PR and it had no newer commits than ${pr.head.slice(0, 7)}. Title: ${String(pr.title).replace(/[\p{C}\p{Zl}\p{Zp}"]/gu, '').slice(0, 80)}`,
       },
     }),
   );
