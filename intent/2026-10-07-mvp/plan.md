@@ -1,5 +1,6 @@
 # Plan: cited-rag-agent  (from spec.md, 2026-10-07) · Status: approved
 Revised 2026-10-07 after the build session's review (`review-2026-10-07.md`).
+Revised 2026-11-22 after the promotion reviews (#74, #75): CLAUDE.md's rules since the 17 Nov trim (#63), and spec references by section instead of line number.
 
 Times are Israel time. The build runs in Claude Code on Paul's machine, from the repo root `C:\Users\privlin\Projects\personal-knowledge-RAG-system`. The planning session writes the prompts and Paul runs them. Each milestone is one PR; the agent pushes named branches and opens PRs, and Paul's merge is the release.
 
@@ -60,7 +61,7 @@ From nothing to the spec's four tables:
   - The main session stays on `sonnet`, and each prompt's first line says when Paul should switch with `/model fable` for a review step.
   - The `verifier` and `architect` subagents carried `model: fable` in their frontmatter, so they ran on Fable whenever the Sonnet session called them. Since 10 Nov 2026 they carry `model: inherit` and run on the session's model. `AGENTS.md` tells the session to call `verifier` before every PR, and `architect` after the same test fails twice.
 
-  Fable has its own weekly allowance on Paul's Max plan (separate from the main limit; usage credits off), so splitting the work spreads it across two limits. The constraint block's "Target Model" line names the coding model (Opus 5.5 since 10 Nov 2026), and its rules apply to every model.
+  Fable has its own weekly allowance on Paul's Max plan (separate from the main limit; usage credits off), so splitting the work spreads it across two limits. The coding model is Opus 5.5 (since 10 Nov 2026). CLAUDE.md's rules apply to every model.
 - **First-pass PR review:** brought forward from M6 by Paul's decision on 9 Oct. PR #15 (`fix/pr-reviewer`) adds a reviewer on Opus 5.5 that applies REVIEW.md to every non-draft pull request from this repository. The verifier (session model) still runs before each PR. Whether the reviewer gets its secret, and its spend, is Paul's decision, made with his other agent settings.
 - **From 10 Nov 2026 (Paul's rule):** Opus 5.5 for coding and everything else, and as the Claude Code default model, because subagents inherit it. Fable 5.2 only for planning, big architecture or hard-bug calls, and only when Paul asks. A one-evening Fable coding trial on 9 Nov used 46% of the Fable meter. The app's runtime model does not change without a test in this repo.
 - **App runtime:** Claude Sonnet 5.5 for the agent ($2 / $10 per M tokens); Voyage `voyage-4` for embeddings.
@@ -106,11 +107,11 @@ From nothing to the spec's four tables:
   - On the production URL itself, before production is called live: `/api/health` shows production's database, one example question gives checked citations and none unchecked, an upload can be asked about and then deleted, and one Vercel cron cleanup run appears in the production logs.
 - **M6:**
   - The README renders on GitHub.
-  - Tests show a visitor who leaves after the first tool round causing no second model call, with the first call's cost in the window and `abandoned` in the log line (in tests; on Vercel the run is never told, see spec.md:132); a `tool_use` stop with no tool block ending in the explicit error; a heading, a table with a citation in a cell, and indented list items rendered as the spec says; the Excerpts column's messages; and the page's sections in the stacked order.
+  - Tests show a visitor who leaves after the first tool round causing no second model call, with the first call's cost in the window and `abandoned` in the log line (in tests; on Vercel the run is never told, see spec.md feature 10, Server log); a `tool_use` stop with no tool block ending in the explicit error; a heading, a table with a citation in a cell, and indented list items rendered as the spec says; the Excerpts column's messages; and the page's sections in the stacked order.
   - The test suite passes while `npm run build` runs alongside it (`hookTimeout` 30 s).
   - On the `m6-readme` preview at 390 px, the sections stack in that order and nothing scrolls sideways except a wide table.
   - The PSD2 licence names EUR-Lex's legal notice, and the README quotes its acknowledgement.
-  - In the final walk-through, a question left after its first step shows `"status":"abandoned"` in the production logs (replaced 2 Nov 2026: not reported on Vercel; see spec.md:132).
+  - In the final walk-through, a question left after its first step shows `"status":"abandoned"` in the production logs (replaced 2 Nov 2026: not reported on Vercel; see spec.md feature 10, Server log).
   - Lighthouse scores at least 90 for performance and accessibility on production.
   - The 5-minute demo has been rehearsed once end to end.
 
@@ -181,7 +182,7 @@ From nothing to the spec's four tables:
 
 `AGENTS.md` also keeps the `nextjs-agent-rules` block that `next dev` writes and re-adds: a pointer to the version-matched Next.js docs in `node_modules/next/dist/docs/`.
 
-**`CLAUDE.md`:** `@AGENTS.md`, followed by the constraint block below, verbatim.
+**`CLAUDE.md`:** `@AGENTS.md`, followed by Paul's code-and-reply rules. Until 17 Nov 2026 this was the constraint block below, verbatim. The 17 Nov trim (#63) restated it in plain sentences and dropped the Target Model line and the .NET, ES module and JSX lines; CLAUDE.md is now the source.
 
 **`REVIEW.md`:**
 ```markdown
@@ -260,7 +261,7 @@ The message tells the agent to push a named branch and open a PR.
 - **`dependabot.yml`:** weekly npm updates, with the two PGlite packages in one group and TypeScript major versions ignored, and weekly GitHub Actions updates.
 - **Home page in M1:** the app name, a one-line description, the environment badge, and links to the intent, spec and plan on GitHub.
 
-## CLAUDE.md constraint block (verbatim, from the planning brief)
+## CLAUDE.md constraint block (from the planning brief; replaced in CLAUDE.md on 17 Nov 2026, kept for history)
 ```
 [CRITICAL DESIGN & LANGUAGE CONSTRAINTS]
 Target Model: Opus 5.5
