@@ -36,7 +36,7 @@ The app has to carry a 5-minute interview screen-share: pick or upload documents
 - The public demo protects Paul's keys: rate limits, upload limits, and caps on agent steps and tokens.
 - The agent never deploys to production and never merges a promotion PR. It pushes named branches and opens PRs; Paul's merge to `master` is the release. Since 2026-11-22 it may merge a PR into `sandbox` with a merge commit once Paul has confirmed that PR in words.
 - No secrets in git or chat. Local .env files go into Paul's encrypted secrets archive; the README has a "Local secrets" section with the marker `<!-- yanshuf-secrets -->`.
-- The repo's CLAUDE.md carries Paul's constraint block (target model, zero commentary, fail loudly, compact React and Node).
+- The repo's CLAUDE.md carries Paul's code-and-reply rules (code first, no commentary, fail loudly, compact React). Since the 17 Nov 2026 trim (#63) it has no target-model line.
 - Paul's time goes on decisions, gates, reviews and the final walk-through. He works Sunday to Thursday, nothing from Friday afternoon to Saturday night or on a chag; TriviaFoundry launches Sunday 11 October.
 - Nothing is claimed on the CV or in the application until it has run on the real demo corpus and Paul has seen it work.
 
