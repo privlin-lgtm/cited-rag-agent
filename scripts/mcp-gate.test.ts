@@ -22,7 +22,7 @@ const run = (tool_name: string, tool_input: object, pr?: object, ghStatus = 0) =
   });
 
 const merge = { owner: 'privlin-lgtm', repo: 'cited-rag-agent', pullNumber: 70, merge_method: 'merge' };
-const openPr = { base: 'sandbox', state: 'open', draft: false, fork: false, title: 'Fix things' };
+const openPr = { base: 'sandbox', state: 'open', draft: false, fork: false, title: 'Fix things', head: 'abc1234def' };
 const unix = process.platform !== 'win32';
 
 describe('mcp-gate', () => {
@@ -46,6 +46,7 @@ describe('mcp-gate', () => {
     ['another repo', { repo: 'other' }],
     ['another owner', { owner: 'someone' }],
     ['no PR number', { pullNumber: undefined }],
+    ['a string PR number', { pullNumber: '70' }],
   ])('blocks a merge with %s', (_, change) => {
     const result = run('mcp__github__merge_pull_request', { ...merge, ...change }, openPr);
     expect(result.status).toBe(2);
@@ -64,8 +65,30 @@ describe('mcp-gate', () => {
     expect(result.stdout).toBe('');
   });
 
+  it('blocks merge_pull_request from another MCP server', () => {
+    expect(run('mcp__gh2__merge_pull_request', merge, openPr).status).toBe(2);
+  });
+
+  it('blocks a merge with no tool input', () => {
+    expect(run('mcp__github__merge_pull_request', null as unknown as object).status).toBe(2);
+  });
+
   it.skipIf(!unix)('blocks when gh cannot read the PR', () => {
     expect(run('mcp__github__merge_pull_request', merge, openPr, 1).status).toBe(2);
+  });
+
+  it.skipIf(!unix).each([
+    ['empty', ''],
+    ['null', 'null'],
+    ['not JSON', 'oops'],
+  ])('blocks when gh prints %s', (_, out) => {
+    const result = spawnSync('node', [hook], {
+      input: JSON.stringify({ tool_name: 'mcp__github__merge_pull_request', tool_input: merge }),
+      encoding: 'utf8',
+      env: { ...process.env, PATH: `${fakeGh}${delimiter}${process.env.PATH}`, FAKE_PR: out, FAKE_STATUS: '0' },
+    });
+    expect(result.status).toBe(2);
+    expect(result.stdout).toBe('');
   });
 
   it.skipIf(!unix)('asks Paul to confirm a merge commit into sandbox', () => {
@@ -76,7 +99,7 @@ describe('mcp-gate', () => {
         hookEventName: 'PreToolUse',
         permissionDecision: 'ask',
         permissionDecisionReason:
-          'Merge PR #70 "Fix things" into sandbox with a merge commit? Approve only if you wrote "merge 70" for this PR.',
+          'Merge PR #70 "Fix things" at abc1234 into sandbox with a merge commit? Approve only if you wrote "merge 70" for this PR and it had no newer commits than abc1234.',
       },
     });
   });

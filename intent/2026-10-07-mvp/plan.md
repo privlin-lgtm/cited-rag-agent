@@ -220,7 +220,7 @@ Skip generated files and anything lint or CI already enforces.
 
 **`.claude/hooks/mcp-gate.mjs`** (#64, revised 2026-11-22):
 - blocks auto-merge, Vercel deploy, promote, rollback, alias and rolling-release tools, and GitHub file writes with no branch or a guarded branch;
-- lets `merge_pull_request` through to a permission prompt only for `privlin-lgtm/cited-rag-agent`, `merge_method: "merge"`, and an open, non-draft, non-fork PR whose base is `sandbox`, read with `gh api`; it blocks when `gh` cannot read the PR. Tests: `scripts/mcp-gate.test.ts`.
+- lets `merge_pull_request` through to a permission prompt only for `privlin-lgtm/cited-rag-agent`, `merge_method: "merge"`, and an open, non-draft, non-fork PR whose base is `sandbox`, read with `gh api`; the prompt names the PR title and head commit. Any failure in the check, including `gh` failing or answering nothing, blocks; another MCP server's `merge_pull_request` is blocked. Tests: `scripts/mcp-gate.test.ts`.
 
 **`.claude/hooks/no-placeholders.mjs`:** as in the vibe-coding-mvp-workflow skill (Phase 3a step 4).
 - It checks only the added text of `.ts`, `.tsx`, `.js`, `.mjs` and `.sql` files.
