@@ -162,7 +162,7 @@ From nothing to the spec's four tables:
   - `npm run ingest:corpus`
   - `npm run eval`
 - **Before reporting done:** run lint, typecheck, test and build, and paste the output. Fix the code, not the test.
-- **Branches:** work on `m<N>-<slug>` or `fix/<slug>`, branched from `sandbox`. Push only with `git push -u origin <that branch>`, and open PRs into `sandbox`. Never push to `sandbox`, `qa` or `master`; never merge; never deploy. Promotion PRs are Paul's.
+- **Branches:** work on `m<N>-<slug>` or `fix/<slug>`, branched from `sandbox`. Push only with `git push -u origin <that branch>`, and open PRs into `sandbox`. Never push to `sandbox`, `qa` or `master`; never deploy. Promotion PRs are Paul's. Since 2026-11-22 an agent may merge a PR into `sandbox` with a merge commit once Paul confirms that PR by number in words.
 - **Migrations:** each change gets a new file, additive and safe for the code already deployed. Never edit an applied migration.
 - **SQL:** goes through `Db` only, with `$n` parameters.
 - **Secrets:** never read `.env`, `.env.local` or `.env.*.local`. `.env.local` holds Sandbox credentials only; QA and production credentials never come to this machine.
@@ -215,7 +215,12 @@ Skip generated files and anything lint or CI already enforces.
   - `git status`, `git diff *`, `git log *`, `git add *`, `git commit *`, `git switch *`, `git fetch *`;
   - `git push -u origin m*`, `git push -u origin fix/*`;
   - `npm run *`, `npm test`, `npx vitest *`.
-- **Hooks:** a PostToolUse hook on `Edit|Write|MultiEdit` runs `no-placeholders.mjs`; a PreToolUse hook on `Bash|PowerShell` runs `production-gate.mjs`.
+- **Ask:** `mcp__github__merge_pull_request` (2026-11-22; it was a deny rule from #64).
+- **Hooks:** a PostToolUse hook on `Edit|Write|MultiEdit` runs `no-placeholders.mjs`; a PreToolUse hook on `Bash|PowerShell` runs `production-gate.mjs`; a PreToolUse hook on `mcp__.*` runs `mcp-gate.mjs`.
+
+**`.claude/hooks/mcp-gate.mjs`** (#64, revised 2026-11-22):
+- blocks auto-merge, Vercel deploy, promote, rollback, alias and rolling-release tools, and GitHub file writes with no branch or a guarded branch;
+- lets `merge_pull_request` through to a permission prompt only for `privlin-lgtm/cited-rag-agent`, `merge_method: "merge"`, and an open, non-draft, non-fork PR whose base is `sandbox`, read with `gh api`; `expectedHeadSha` must equal the PR's head, so GitHub refuses the merge if the head moves, and the prompt names the PR title and pinned head. Any failure in the check, including `gh` failing or answering nothing, blocks; another MCP server's `merge_pull_request` is blocked. Tests: `scripts/mcp-gate.test.ts`.
 
 **`.claude/hooks/no-placeholders.mjs`:** as in the vibe-coding-mvp-workflow skill (Phase 3a step 4).
 - It checks only the added text of `.ts`, `.tsx`, `.js`, `.mjs` and `.sql` files.

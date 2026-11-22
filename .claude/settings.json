@@ -15,7 +15,6 @@
       "Bash(git push * qa)",
       "Bash(cat .env*)",
       "Bash(cat ./.env*)",
-      "mcp__github__merge_pull_request",
       "mcp__github__enable_pr_auto_merge",
       "mcp__Vercel__create_deployment",
       "mcp__Vercel__request_promote",
@@ -33,6 +32,9 @@
       "mcp__vercel__complete_rolling_release",
       "mcp__Vercel__deploy_to_vercel",
       "mcp__vercel__deploy_to_vercel"
+    ],
+    "ask": [
+      "mcp__github__merge_pull_request"
     ],
     "allow": [
       "Bash(git status)",
