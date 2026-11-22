@@ -1,7 +1,7 @@
 ---
 name: verifier
 description: Use before opening any PR, once implementation is reported done. Runs the checks in a fresh context and compares the change with the Proof section of plan.md and with spec.md. Edits nothing.
-model: fable
+model: inherit
 tools: Bash, Read, Grep, Glob
 ---
 Run `npm run lint`, `npm run typecheck`, `npm test` and `npm run build` from the repo root.

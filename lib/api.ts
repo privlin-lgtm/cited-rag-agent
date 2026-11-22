@@ -161,7 +161,7 @@ export const handleAsk = (request: Request, deps: ApiDeps) =>
           } finally {
             request.signal.removeEventListener('abort', leave);
             console.info(JSON.stringify({ event: 'ask', ...run, ...result() }));
-            await releaseBudget(deps.db, reservedAt);
+            await releaseBudget(deps.db, reservedAt).catch((error) => console.error(JSON.stringify({ event: 'release_failed', message: String(error) })));
           }
           write({ type: 'done', ...result() });
           if (!closed) controller.close();

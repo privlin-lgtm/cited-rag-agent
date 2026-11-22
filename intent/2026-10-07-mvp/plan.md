@@ -49,8 +49,8 @@ From nothing to the spec's four tables:
 - `documents`, `chunks` and `usage_windows`, created in `0001_init.sql`, along with the `vector` extension and the HNSW and GIN indexes.
 
 ## Model split
-- **Claude Code, Sonnet 5.5, the build default:** implements M1–M6 from this plan. Its coding scores match Fable's on published benchmarks; it's faster, and it follows a tight spec literally.
-- **Claude Code, Fable 5.1, the judgement steps:**
+- **(As built in October)** **Claude Code, Sonnet 5.5, the build default:** implements M1–M6 from this plan. Its coding scores match Fable's on published benchmarks; it's faster, and it follows a tight spec literally.
+- **(As built in October)** **Claude Code, Fable 5.1, the judgement steps:**
   - plan-mode reviews of the spec and of each milestone's approach;
   - the design of M3's agent loop and citation check (plan mode first, then Sonnet implements);
   - the verifier pass before each PR;
@@ -58,10 +58,11 @@ From nothing to the spec's four tables:
 
   A session can't change its own model, so this runs two ways:
   - The main session stays on `sonnet`, and each prompt's first line says when Paul should switch with `/model fable` for a review step.
-  - The `verifier` and `architect` subagents carry `model: fable` in their frontmatter, so they run on Fable whenever the Sonnet session calls them. `AGENTS.md` tells the session to call `verifier` before every PR, and `architect` after the same test fails twice.
+  - The `verifier` and `architect` subagents carried `model: fable` in their frontmatter, so they ran on Fable whenever the Sonnet session called them. Since 10 Nov 2026 they carry `model: inherit` and run on the session's model. `AGENTS.md` tells the session to call `verifier` before every PR, and `architect` after the same test fails twice.
 
-  Fable has its own weekly allowance on Paul's Max plan (separate from the main limit; usage credits off), so splitting the work spreads it across two limits. The constraint block's "Target Model: Fable 5.1" line stays verbatim, and its rules apply to both models.
-- **First-pass PR review:** brought forward from M6 by Paul's decision on 9 Oct. PR #15 (`fix/pr-reviewer`) adds a reviewer on Opus 5.5 that applies REVIEW.md to every non-draft pull request from this repository. The Fable verifier still runs before each PR. Whether the reviewer gets its secret, and its spend, is Paul's decision, made with his other agent settings.
+  Fable has its own weekly allowance on Paul's Max plan (separate from the main limit; usage credits off), so splitting the work spreads it across two limits. The constraint block's "Target Model" line names the coding model (Opus 5.5 since 10 Nov 2026), and its rules apply to every model.
+- **First-pass PR review:** brought forward from M6 by Paul's decision on 9 Oct. PR #15 (`fix/pr-reviewer`) adds a reviewer on Opus 5.5 that applies REVIEW.md to every non-draft pull request from this repository. The verifier (session model) still runs before each PR. Whether the reviewer gets its secret, and its spend, is Paul's decision, made with his other agent settings.
+- **From 10 Nov 2026 (Paul's rule):** Opus 5.5 for coding and everything else, and as the Claude Code default model, because subagents inherit it. Fable 5.2 only for planning, big architecture or hard-bug calls, and only when Paul asks. A one-evening Fable coding trial on 9 Nov used 46% of the Fable meter. The app's runtime model does not change without a test in this repo.
 - **App runtime:** Claude Sonnet 5.5 for the agent ($2 / $10 per M tokens); Voyage `voyage-4` for embeddings.
 
 ## Proof
@@ -105,11 +106,11 @@ From nothing to the spec's four tables:
   - On the production URL itself, before production is called live: `/api/health` shows production's database, one example question gives checked citations and none unchecked, an upload can be asked about and then deleted, and one Vercel cron cleanup run appears in the production logs.
 - **M6:**
   - The README renders on GitHub.
-  - Tests show a visitor who leaves after the first tool round causing no second model call, with the first call's cost in the window and `abandoned` in the log line; a `tool_use` stop with no tool block ending in the explicit error; a heading, a table with a citation in a cell, and indented list items rendered as the spec says; the Excerpts column's messages; and the page's sections in the stacked order.
+  - Tests show a visitor who leaves after the first tool round causing no second model call, with the first call's cost in the window and `abandoned` in the log line (in tests; on Vercel the run is never told, see spec.md:132); a `tool_use` stop with no tool block ending in the explicit error; a heading, a table with a citation in a cell, and indented list items rendered as the spec says; the Excerpts column's messages; and the page's sections in the stacked order.
   - The test suite passes while `npm run build` runs alongside it (`hookTimeout` 30 s).
   - On the `m6-readme` preview at 390 px, the sections stack in that order and nothing scrolls sideways except a wide table.
   - The PSD2 licence names EUR-Lex's legal notice, and the README quotes its acknowledgement.
-  - In the final walk-through, a question left after its first step shows `"status":"abandoned"` in the production logs.
+  - In the final walk-through, a question left after its first step shows `"status":"abandoned"` in the production logs (replaced 2 Nov 2026: not reported on Vercel; see spec.md:132).
   - Lighthouse scores at least 90 for performance and accessibility on production.
   - The 5-minute demo has been rehearsed once end to end.
 
@@ -161,7 +162,7 @@ From nothing to the spec's four tables:
   - `npm run ingest:corpus`
   - `npm run eval`
 - **Before reporting done:** run lint, typecheck, test and build, and paste the output. Fix the code, not the test.
-- **Branches:** work on `m<N>-<slug>` or `fix/<slug>`, branched from `sandbox`. Push only with `git push -u origin <that branch>`, and open PRs into `sandbox`. Never push to `sandbox`, `qa` or `master`; never merge; never deploy. Promotion PRs are Paul's.
+- **Branches:** work on `m<N>-<slug>` or `fix/<slug>`, branched from `sandbox`. Push only with `git push -u origin <that branch>`, and open PRs into `sandbox`. Never push to `sandbox`, `qa` or `master`; never deploy. Promotion PRs are Paul's. Since 2026-11-22 an agent may merge a PR into `sandbox` with a merge commit once Paul confirms that PR by number in words.
 - **Migrations:** each change gets a new file, additive and safe for the code already deployed. Never edit an applied migration.
 - **SQL:** goes through `Db` only, with `$n` parameters.
 - **Secrets:** never read `.env`, `.env.local` or `.env.*.local`. `.env.local` holds Sandbox credentials only; QA and production credentials never come to this machine.
@@ -214,7 +215,12 @@ Skip generated files and anything lint or CI already enforces.
   - `git status`, `git diff *`, `git log *`, `git add *`, `git commit *`, `git switch *`, `git fetch *`;
   - `git push -u origin m*`, `git push -u origin fix/*`;
   - `npm run *`, `npm test`, `npx vitest *`.
-- **Hooks:** a PostToolUse hook on `Edit|Write|MultiEdit` runs `no-placeholders.mjs`; a PreToolUse hook on `Bash|PowerShell` runs `production-gate.mjs`.
+- **Ask:** `mcp__github__merge_pull_request` (2026-11-22; it was a deny rule from #64).
+- **Hooks:** a PostToolUse hook on `Edit|Write|MultiEdit` runs `no-placeholders.mjs`; a PreToolUse hook on `Bash|PowerShell` runs `production-gate.mjs`; a PreToolUse hook on `mcp__.*` runs `mcp-gate.mjs`.
+
+**`.claude/hooks/mcp-gate.mjs`** (#64, revised 2026-11-22):
+- blocks auto-merge, Vercel deploy, promote, rollback, alias and rolling-release tools, and GitHub file writes with no branch or a guarded branch;
+- lets `merge_pull_request` through to a permission prompt only for `privlin-lgtm/cited-rag-agent`, `merge_method: "merge"`, and an open, non-draft, non-fork PR whose base is `sandbox`, read with `gh api`; `expectedHeadSha` must equal the PR's head, so GitHub refuses the merge if the head moves, and the prompt names the PR title and pinned head. Any failure in the check, including `gh` failing or answering nothing, blocks; another MCP server's `merge_pull_request` is blocked. Tests: `scripts/mcp-gate.test.ts`.
 
 **`.claude/hooks/no-placeholders.mjs`:** as in the vibe-coding-mvp-workflow skill (Phase 3a step 4).
 - It checks only the added text of `.ts`, `.tsx`, `.js`, `.mjs` and `.sql` files.
@@ -257,7 +263,7 @@ The message tells the agent to push a named branch and open a PR.
 ## CLAUDE.md constraint block (verbatim, from the planning brief)
 ```
 [CRITICAL DESIGN & LANGUAGE CONSTRAINTS]
-Target Model: Fable 5.1
+Target Model: Opus 5.5
 
 1. Output Format: Start directly with the code block. Omit all introductory text, markdown explanations, and post-code summaries. The only text after the code is a two-line footer: files touched, and the test/build result.
 2. Zero Commentary: Remove all inline comments, JSDoc, XML documentation, and headers unless a line uses an entirely opaque hack.
