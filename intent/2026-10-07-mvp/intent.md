@@ -34,7 +34,7 @@ The app has to carry a 5-minute interview screen-share: pick or upload documents
 - The demo corpus is public and licence-checked, and contains none of Paul's own files. Payments or fintech material is preferred.
 - Money: free tiers where they do the job. Supabase Pro is pre-approved if needed, but only after checking its effect on the whole organisation and stating the monthly total. Vercel Pro is already paid. Every API key gets a spend cap before first use. Anything else that costs money goes to Paul with its price first.
 - The public demo protects Paul's keys: rate limits, upload limits, and caps on agent steps and tokens.
-- The agent never merges or deploys to production. It pushes named branches and opens PRs; Paul's merge is the release.
+- The agent never deploys to production and never merges a promotion PR. It pushes named branches and opens PRs; Paul's merge to `master` is the release. Since 2026-11-22 it may merge a PR into `sandbox` with a merge commit once Paul has confirmed that PR in words.
 - No secrets in git or chat. Local .env files go into Paul's encrypted secrets archive; the README has a "Local secrets" section with the marker `<!-- yanshuf-secrets -->`.
 - The repo's CLAUDE.md carries Paul's constraint block (target model, zero commentary, fail loudly, compact React and Node).
 - Paul's time goes on decisions, gates, reviews and the final walk-through. He works Sunday to Thursday, nothing from Friday afternoon to Saturday night or on a chag; TriviaFoundry launches Sunday 11 October.
